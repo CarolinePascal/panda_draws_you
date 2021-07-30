@@ -1,0 +1,17 @@
+<?xml version="1.0" ?>
+<launch>
+
+    <!-- GENERAL ARGUMENTS -->
+    <arg name="robot" default="panda"/>
+    <arg name="simulation" default="true"/>
+
+    <!-- ROBOT SETUP -->
+    <include file="$(find robot_arm_tools)/launch/Setup_$(arg robot).launch">
+        <arg name="simulation" value="$(arg simulation)"/>
+        <arg name="load_pencil" value="true" />
+    </include>
+
+    <!-- MAIN NODE -->
+    <node pkg="panda_draws_you" type="panda_draws_you_node" name="rpanda_draws_you_node" output="screen"/>
+
+</launch>
