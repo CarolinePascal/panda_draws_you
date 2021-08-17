@@ -217,7 +217,6 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     waypoints.push_back(currentPose);
 
     int currentIndex = X.size()-1;
-    int newIndex;
     std::vector<int> visitedIndex {currentIndex};
 
     std::vector<size_t> indices(X.size());
@@ -225,7 +224,7 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
 
     while(visitedIndex.size() < X.size())
     {
-        //Sort the distances to the current waypoint
+        //Find the next closest waypoint
         localDistances = distances[currentIndex];
         localDistances.erase(localDistances.begin() + currentIndex);
 
@@ -239,48 +238,33 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
         distances.erase(distances.begin() + currentIndex);
         for(auto& row:distances)
         {
-            row.erase(row.begin() + currentIndex);
+            row.erase(row.begin()+currentIndex);
         }
 
         indices.erase(indices.begin() + currentIndex);
 
-        //Skip waypoints which are too close from the current waypoint
-        newIndex = 0;   
-        while(localDistances[newIndex] < 0.003*0.003)
-        {
-            visitedIndex.push_back(indices[newIndex]);
-            newIndex++;
-        }
-
-        //Switch to the closest (but not too close) waypoint
-        currentIndex = idx[newIndex];
+        //Switch to the closest waypoint
+        currentIndex = idx[0];
         currentPose.position.x = X[indices[currentIndex]];
         currentPose.position.y = Y[indices[currentIndex]];
-        visitedIndex.push_back(indices[currentIndex]);
 
-        //Delete the too close waypoints
-        for(int i = 0; i < newIndex; i++)
+        //Skip waypoint if too close from the previous one
+        if((waypoints.back().position.x-currentPose.position.x)*(waypoints.back().position.x-currentPose.position.x) + (waypoints.back().position.y-currentPose.position.y)*(waypoints.back().position.y-currentPose.position.y) > 0.003*0.003)
         {
-            distances.erase(distances.begin() + idx[i]);
-            for(auto& row:distances)
+            if((waypoints.back().position.x-currentPose.position.x)*(waypoints.back().position.x-currentPose.position.x) + (waypoints.back().position.y-currentPose.position.y)*(waypoints.back().position.y-currentPose.position.y) > 0.01*0.01)
             {
-                row.erase(row.begin() + idx[i]);
+                intermediatePose = waypoints.back();
+                intermediatePose.position.z += 0.02;
+                waypoints.push_back(intermediatePose);
+                intermediatePose = currentPose;
+                intermediatePose.position.z += 0.02;
+                waypoints.push_back(intermediatePose);
             }
 
-            indices.erase(indices.begin() + idx[i]);   
+            waypoints.push_back(currentPose);
         }
 
-        if(localDistances[newIndex] > 0.01*0.01)
-        {
-            intermediatePose = waypoints.back();
-            intermediatePose.position.z += 0.02;
-            waypoints.push_back(intermediatePose);
-            intermediatePose = currentPose;
-            intermediatePose.position.z += 0.02;
-            waypoints.push_back(intermediatePose);
-        }
-
-        waypoints.push_back(currentPose);
+        visitedIndex.push_back(indices[currentIndex]);
     }
 
     //imshow("Output",output);
@@ -301,7 +285,7 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     myfile.close();
     */
 
-    
+    /*
     std::map<std::string, std::string> keywords;
     keywords.insert(std::pair<std::string, std::string>("ms", "2") );
     keywords.insert(std::pair<std::string, std::string>("c", "blue") );
@@ -317,5 +301,6 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     plt::ylabel("x");
     plt::axis("equal");
     plt::show();
+    */
     
 }
