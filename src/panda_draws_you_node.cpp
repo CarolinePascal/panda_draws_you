@@ -34,7 +34,7 @@ int main(int argc, char **argv)
 
     ROS_INFO("Starting sketch to waypoints conversion...");
 
-    sketchToWaypoints("/home/student/Desktop/Picture3.png",waypoints,-0.01,quaternionMsg);
+    sketchToWaypoints(ros::package::getPath("panda_draws_you")+"/config/Picture1.png",waypoints,-0.01,quaternionMsg);
 
     //Perform approach motion
     geometry_msgs::Pose startingPose = waypoints[0];
