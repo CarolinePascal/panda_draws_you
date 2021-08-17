@@ -43,7 +43,7 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
 
     //Filter parameters
     int lowThreshold=0;
-    int maxThreshold=15;
+    int maxThreshold=10;
     int const max_lowThreshold = 500;
     int alDerive=100;
     int alMean=100;
@@ -97,12 +97,12 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     {
         if(columnSum.at<int>(i) != 255*output.cols && minRow == output.rows)
         {
-            minRow = i;
+            minRow = max(0,i-1);
         }
 
         if(columnSum.at<int>(output.rows - 1 - i) != 255*output.cols && maxRow == 0)
         {
-            maxRow = output.rows - i - 1;
+            maxRow = min(output.rows - i, output.rows - 1);
         }
 
         if(minRow != output.rows && maxRow != 0)
@@ -115,12 +115,12 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     {
         if(rowSum.at<int>(i) != 255*output.rows && minCol == output.cols)
         {
-            minCol = i;
+            minCol = max(0,i-1);
         }
 
         if(rowSum.at<int>(output.cols - 1 - i) != 255*output.rows && maxCol == 0)
         {
-            maxCol = output.cols - i - 1;
+            maxCol = min(output.cols - i, output.rows - 1);
         }
 
         if(minCol != output.cols && maxCol != 0)
@@ -131,12 +131,55 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
 
     Rect crop(minCol, minRow, maxCol-minCol, maxRow-minRow);
     output = output(crop);  
+    double ratio = min(X_SIZE/(maxRow-minRow),Y_SIZE/(maxCol-minCol));
 
     //imshow("Output",output);
     //waitKey(); 
 
+    /*
+    Mat kernel1 = (Mat_<int>(3, 3) <<
+        0, 0, 0,
+        1, -1, 1,
+        1, 1, 1);
+
+    Mat kernel2 = (Mat_<int>(3, 3) <<
+        0, 1, 1,
+        0, -1, 1,
+        0, 1, 1);
+
+    Mat kernel3 = (Mat_<int>(3, 3) <<
+        1, 1, 1,
+        1, -1, 1,
+        0, 0, 0);
+
+    Mat kernel4 = (Mat_<int>(3, 3) <<
+        1, 1, 0,
+        1, -1, 0,
+        1, 1, 0);
+
+    Mat output_image, output_image1, output_image2, output_image3, output_image4;
+
+    Mat element = getStructuringElement(MORPH_RECT,
+                       Size(3,3),
+                       Point(1,1));
+    erode(output, output, element);
+    erode(output, output, element);
+    dilate(output, output, element);
+    dilate(output, output, element);
+
+    morphologyEx(output, output_image1, MORPH_HITMISS, kernel1);
+    morphologyEx(output, output_image2, MORPH_HITMISS, kernel2);
+    morphologyEx(output, output_image3, MORPH_HITMISS, kernel3);
+    morphologyEx(output, output_image4, MORPH_HITMISS, kernel4);
+
+    bitwise_or(output_image1,output_image2,output_image);
+    bitwise_or(output_image,output_image3,output_image);
+    bitwise_or(output_image,output_image4,output_image);
+    */
+    
+
     //Convert pixels into waypoints => OPTIMISATION
-    std::vector<double> X,Y,rowDistances;
+    std::vector<double> X,Y,localDistances;
     std::vector<std::vector<double>> distances;
     double distance;
 
@@ -146,47 +189,69 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
         {
             if(output.at<uchar>(i,j) == 0)
             {
-                X.push_back(output.rows - i);
-                Y.push_back(j);
+                X.push_back(X_OFFSET + ratio*(output.rows - i));
+                Y.push_back(Y_OFFSET + ratio*j);
 
-                rowDistances.clear();
+                localDistances.clear();
 
                 for(int k = 0; k < X.size() - 1; k++)
                 {
-                    distance = sqrt((X[k]-X.back())*(X[k]-X.back()) + (Y[k]-Y.back())*(Y[k]-Y.back()));
-                    rowDistances.push_back(distance);
+                    distance = (X[k]-X.back())*(X[k]-X.back()) + (Y[k]-Y.back())*(Y[k]-Y.back());
+                    localDistances.push_back(distance);
                     distances[k].push_back(distance);
                 }
 
-                rowDistances.push_back(0.0);
-                distances.push_back(rowDistances);
+                localDistances.push_back(0.0);
+                distances.push_back(localDistances);
             }
         }
     }
-
-    //imshow("Output",output);
-    //waitKey();
 
     //Re-organise waypoints order to reduce the overall pencil trajectory => OPTIMISATION
     geometry_msgs::Pose currentPose, intermediatePose;
     currentPose.position.z = height;
     currentPose.orientation = orientation;
 
-    std::vector<int> visitedIndex;
-    std::vector<size_t> idx(X.size());
-    int currentIndex = X.size()-1;
+    currentPose.position.x = X.back();
+    currentPose.position.y = Y.back();
+    waypoints.push_back(currentPose);
 
-    double ratio = min(X_SIZE/(maxRow-minRow),Y_SIZE/(maxCol-minCol));
+    int currentIndex = X.size()-1;
+    std::vector<int> visitedIndex {currentIndex};
+
+    std::vector<size_t> indices(X.size());
+    std::iota(indices.begin(), indices.end(), 0);
 
     while(visitedIndex.size() < X.size())
     {
-        currentPose.position.x = X_OFFSET + ratio*X[currentIndex];
-        currentPose.position.y = Y_OFFSET + ratio*Y[currentIndex];
+        //Find the next closest waypoint
+        localDistances = distances[currentIndex];
+        localDistances.erase(localDistances.begin() + currentIndex);
+
+        std::vector<size_t> idx(localDistances.size());
+        std::iota(idx.begin(), idx.end(), 0);
+        
+        std::stable_sort(idx.begin(), idx.end(),
+            [&localDistances](size_t i1, size_t i2) {return localDistances[i1] < localDistances[i2];});
+
+        //Delete the current waypoint in the distance matrix and indices vector
+        distances.erase(distances.begin() + currentIndex);
+        for(auto& row:distances)
+        {
+            row.erase(row.begin()+currentIndex);
+        }
+
+        indices.erase(indices.begin() + currentIndex);
+
+        //Switch to the closest waypoint
+        currentIndex = idx[0];
+        currentPose.position.x = X[indices[currentIndex]];
+        currentPose.position.y = Y[indices[currentIndex]];
 
         //Skip waypoint if too close from the previous one
-        if(visitedIndex.empty() || sqrt((waypoints.back().position.x-currentPose.position.x)*(waypoints.back().position.x-currentPose.position.x) + (waypoints.back().position.y-currentPose.position.y)*(waypoints.back().position.y-currentPose.position.y)) > 0.003)
+        if((waypoints.back().position.x-currentPose.position.x)*(waypoints.back().position.x-currentPose.position.x) + (waypoints.back().position.y-currentPose.position.y)*(waypoints.back().position.y-currentPose.position.y) > 0.003*0.003)
         {
-            if(!waypoints.empty() && sqrt((waypoints.back().position.x-currentPose.position.x)*(waypoints.back().position.x-currentPose.position.x) + (waypoints.back().position.y-currentPose.position.y)*(waypoints.back().position.y-currentPose.position.y)) > 0.02)
+            if((waypoints.back().position.x-currentPose.position.x)*(waypoints.back().position.x-currentPose.position.x) + (waypoints.back().position.y-currentPose.position.y)*(waypoints.back().position.y-currentPose.position.y) > 0.01*0.01)
             {
                 intermediatePose = waypoints.back();
                 intermediatePose.position.z += 0.02;
@@ -199,22 +264,7 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
             waypoints.push_back(currentPose);
         }
 
-        visitedIndex.push_back(currentIndex);
-
-        //Find the next closest waypoint... 
-        iota(idx.begin(), idx.end(), 0);
-        std::vector<double> localDistances = distances[currentIndex];
-        stable_sort(idx.begin(), idx.end(),
-            [&localDistances](size_t i1, size_t i2) {return localDistances[i1] < localDistances[i2];});
-
-        //... Which has not been visited yet
-        currentIndex = (int)idx[0];
-        int counter = 0;
-        while(std::find(visitedIndex.begin(), visitedIndex.end(), currentIndex) != visitedIndex.end())
-        {
-            counter++;
-            currentIndex = (int)idx[counter];
-        }
+        visitedIndex.push_back(indices[currentIndex]);
     }
 
     //imshow("Output",output);
@@ -228,6 +278,8 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
         myfile << waypoints[i].position.x;
         myfile << ";";
         myfile << waypoints[i].position.y;
+        myfile << ";";
+        myfile << waypoints[i].position.z;
         myfile << "\n";
     }
     myfile.close();
@@ -250,4 +302,5 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     plt::axis("equal");
     plt::show();
     */
+    
 }
