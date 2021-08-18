@@ -10,6 +10,20 @@
 
 using namespace cv;
 
+struct CANNY_DERICHE_PARAMETERS
+{
+    int lowThreshold;
+    int maxThreshold;
+
+    int alDerive;
+    int alMean;
+
+    int gaussianBlur;
+
+    Mat input;
+    Mat output;
+};
+
 /*
 Using Canny's Criteria to Derive a Recursively Implemented Optimal Edge Detector International Journal of Computer Vision,167-187 (1987)
 http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.476.5736&rep=rep1&type=pdf

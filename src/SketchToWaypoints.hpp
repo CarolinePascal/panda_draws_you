@@ -7,6 +7,9 @@
 #define X_OFFSET 0.35
 #define Y_OFFSET -0.1
 
+#define PIXEL_DISTANCE 0.003
+#define JUMP_DISTANCE 0.015
+
 #include <vector>
 #include <string>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
@@ -22,40 +25,26 @@
 #include "panda_draws_you/matplotlibcpp.h"
 namespace plt = matplotlibcpp;
 
-void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Pose> &waypoints, double height, geometry_msgs::Quaternion orientation)
+void CannyDericheFilter(int, void* pointer)
 {
-    Mat output = imread(sketchFileName,IMREAD_GRAYSCALE);
+    CANNY_DERICHE_PARAMETERS* parameters = (CANNY_DERICHE_PARAMETERS*)pointer;
 
-    //imshow("Output",output);
-    //waitKey();
+    //Pre-processing : gaussian blur
+    GaussianBlur(parameters->input,parameters->output,Size(2*parameters->gaussianBlur+1,2*parameters->gaussianBlur+1),0.0);
 
-    //Pre-processing : gaussian blur and bilateral filter
-    GaussianBlur(output,output,Size(3,3),0.0);
+    //Pre-processing : edge-preserving filter
+    //Mat dst = output.clone();
+    //bilateralFilter(parameters->output,parameters->output,9,200,200);
+    //output = dst.clone();
 
-    Mat dst = output.clone();
-    bilateralFilter(output,dst,9,200,200);
-    output = dst.clone();
-
-    //imshow("Output",output);
-    //waitKey();
-    
-    //Apply Canny Deriche filter
-
-    //Filter parameters
-    int lowThreshold=0;
-    int maxThreshold=10;
-    int const max_lowThreshold = 500;
-    int alDerive=100;
-    int alMean=100;
-
-    //Compute filter
-    double d=alDerive/100.0,m=alMean/100.0;
+    //Computing Canny-Deriche filter
+    double d=parameters->alDerive/100.0,m=parameters->alMean/100.0;
 
     UMat img;
-    output.copyTo(img);
+    parameters->output.copyTo(img);
 
-    UMat rx=  GradientDericheX(img,d,m);
-    UMat ry=  GradientDericheY(img,d,m);
+    UMat rx=GradientDericheX(img,d,m);
+    UMat ry=GradientDericheY(img,d,m);
 
     double minv,maxv;
     minMaxLoc(rx,&minv,&maxv);
@@ -71,72 +60,94 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     minMaxLoc(sobel_x,&minv,&maxv);
     minMaxLoc(sobel_y,&minv,&maxv);
 
-    CannyBis(img, output, lowThreshold, maxThreshold, 5, true, sobel_x,sobel_y);
+    CannyBis(img, parameters->output, parameters->lowThreshold, parameters->maxThreshold, 5, true, sobel_x,sobel_y);
 
+    //Updating display
+    imshow("CannyDericheFilter", parameters->output);
+}
+
+void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Pose> &waypoints, double height, geometry_msgs::Quaternion orientation)
+{
+    //Loading the input sketch
+    Mat output = imread(sketchFileName,IMREAD_GRAYSCALE);
+
+    //[DISPLAY]
+    //imshow("Output",output);
+    //waitKey();
+    
+    //Edges detection : Canny-Deriche filter
+
+    //Setting initial filter parameters
+    CANNY_DERICHE_PARAMETERS parameters;
+
+    parameters.lowThreshold=0;
+    parameters.maxThreshold=20;
+    parameters.alDerive=100;
+    parameters.alMean=50;
+    parameters.gaussianBlur=1;
+
+    parameters.input = output.clone();
+    parameters.output = output.clone();
+
+    //Displaying first output
+    CannyDericheFilter(0,&parameters);
+
+    namedWindow("CannyDericheFilter", WINDOW_AUTOSIZE);
+    imshow("CannyDericheFilter", parameters.output);
+
+    //Tweaking parameters...
+    createTrackbar( "Gaussian Blur:","CannyDericheFilter", &parameters.gaussianBlur, 10, CannyDericheFilter, (void*)&parameters);
+    createTrackbar( "Min Threshold:","CannyDericheFilter", &parameters.lowThreshold, 500, CannyDericheFilter, (void*)&parameters);
+    createTrackbar( "Max Threshold:", "CannyDericheFilter", &parameters.maxThreshold, 500, CannyDericheFilter, (void*)&parameters);
+    createTrackbar( "Derive:","CannyDericheFilter", &parameters.alDerive, 400, CannyDericheFilter, (void*)&parameters);
+    createTrackbar( "Mean:", "CannyDericheFilter", &parameters.alMean, 400, CannyDericheFilter, (void*)&parameters);
+
+    waitKey();   
+
+    output = parameters.output.clone();
+
+    //[DISPLAY]
     //imshow("Output",output);
     //waitKey();
 
     //Removing detected edges on the picture borders
-    output.row(0) = Scalar(0,0,0);
-    output.row(output.rows - 1) = Scalar(0,0,0);
-    output.col(0) = Scalar(0,0,0);
-    output.col(output.cols - 1) = Scalar(0,0,0);
+    output.row(0) = Scalar(0);
+    output.row(output.rows - 1) = Scalar(0);
+    output.col(0) = Scalar(0);
+    output.col(output.cols - 1) = Scalar(0);
 
-    //Thresholding and inversion
+    //Thresholding
     threshold(output,output,127,255,0);
-    bitwise_not(output,output);
 
-    //Crop image to fit the sketch
+    //Cropping image to fit the input sketch
     Mat rowSum, columnSum;
+    double minVal, maxVal;
+
     reduce(output,columnSum,1,CV_REDUCE_SUM,CV_32S);
+    minMaxLoc(columnSum, &minVal, &maxVal);
+    columnSum.convertTo(columnSum,CV_8UC1,255.0/(maxVal-minVal),-255.0*minVal/(maxVal-minVal));
+
     reduce(output,rowSum,0,CV_REDUCE_SUM,CV_32S);
+    minMaxLoc(rowSum, &minVal, &maxVal);
+    rowSum.convertTo(rowSum,CV_8UC1,255.0/(maxVal-minVal),-255.0*minVal/(maxVal-minVal));
 
-    int minCol = output.cols, minRow = output.rows, maxCol = 0, maxRow = 0;
+    std::vector<Point> rowId, columnId;
+    findNonZero(columnSum,columnId);
+    findNonZero(rowSum,rowId);
 
-    for(int i = 0; i < output.rows; i++)
-    {
-        if(columnSum.at<int>(i) != 255*output.cols && minRow == output.rows)
-        {
-            minRow = max(0,i-1);
-        }
-
-        if(columnSum.at<int>(output.rows - 1 - i) != 255*output.cols && maxRow == 0)
-        {
-            maxRow = min(output.rows - i, output.rows - 1);
-        }
-
-        if(minRow != output.rows && maxRow != 0)
-        {
-            break;
-        }
-    }
-
-    for(int i = 0; i < output.cols; i++)
-    {
-        if(rowSum.at<int>(i) != 255*output.rows && minCol == output.cols)
-        {
-            minCol = max(0,i-1);
-        }
-
-        if(rowSum.at<int>(output.cols - 1 - i) != 255*output.rows && maxCol == 0)
-        {
-            maxCol = min(output.cols - i, output.rows - 1);
-        }
-
-        if(minCol != output.cols && maxCol != 0)
-        {
-            break;
-        }
-    }
+    int minCol = max(0, rowId.front().x - 1), maxCol = min(output.cols - 1, rowId.back().x + 1);
+    int minRow = max(0, columnId.front().y - 1), maxRow = min(output.rows - 1, columnId.back().y + 1);
 
     Rect crop(minCol, minRow, maxCol-minCol, maxRow-minRow);
     output = output(crop);  
     double ratio = min(X_SIZE/(maxRow-minRow),Y_SIZE/(maxCol-minCol));
 
+    //[DISPLAY]
     //imshow("Output",output);
-    //waitKey(); 
+    //waitKey();
 
     /*
+    //Finding breakpoints in edge lines using hit-or-miss morphological transform
     Mat kernel1 = (Mat_<int>(3, 3) <<
         0, 0, 0,
         1, -1, 1,
@@ -159,13 +170,11 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
 
     Mat output_image, output_image1, output_image2, output_image3, output_image4;
 
-    Mat element = getStructuringElement(MORPH_RECT,
-                       Size(3,3),
-                       Point(1,1));
-    erode(output, output, element);
-    erode(output, output, element);
-    dilate(output, output, element);
-    dilate(output, output, element);
+    //Mat element = getStructuringElement(MORPH_RECT, Size(3,3), Point(1,1));
+    //erode(output, output, element);
+    //erode(output, output, element);
+    //dilate(output, output, element);
+    //dilate(output, output, element);
 
     morphologyEx(output, output_image1, MORPH_HITMISS, kernel1);
     morphologyEx(output, output_image2, MORPH_HITMISS, kernel2);
@@ -175,39 +184,61 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     bitwise_or(output_image1,output_image2,output_image);
     bitwise_or(output_image,output_image3,output_image);
     bitwise_or(output_image,output_image4,output_image);
-    */
-    
 
-    //Convert pixels into waypoints => OPTIMISATION
+    imshow("Breakpoints",output_image);
+    imshow("Original",output);
+    waitKey();
+    */
+
+    //Sampling pixels at a given distance from each other
+    int size = (int)(PIXEL_DISTANCE/ratio);
+    Mat patch(2*size+1, 2*size+1, CV_8UC1, Scalar(0)); 
+    patch.at<uchar>(size, size) = 255;
+
+    copyMakeBorder(output, output, size, size, size, size, BORDER_CONSTANT, Scalar(0));
+
+    for(int i = size; i < output.rows - size; i++)
+    {
+        for(int j = size; j < output.cols - size; j++)
+        {
+            if(output.at<uchar>(i,j) == 255)
+            {
+                patch.copyTo(output(Rect(j-size, i-size, 2*size+1, 2*size+1)));
+            } 
+        }
+    }
+
+    //[DISPLAY]
+    //imshow("Output",output);
+    //waitKey(); 
+    
+    //Converting pixels into waypoints
     std::vector<double> X,Y,localDistances;
     std::vector<std::vector<double>> distances;
     double distance;
 
-    for(int i = 0; i < output.rows; i++)
+    std::vector<Point> pixelId;
+    findNonZero(output,pixelId);
+
+    for(int i = 0; i < pixelId.size(); i++)
     {
-        for(int j = 0; j < output.cols; j++)
+        X.push_back(X_OFFSET + ratio*(output.rows - pixelId[i].y));
+        Y.push_back(Y_OFFSET + ratio*pixelId[i].x);
+
+        localDistances.clear();
+
+        for(int k = 0; k < X.size() - 1; k++)
         {
-            if(output.at<uchar>(i,j) == 0)
-            {
-                X.push_back(X_OFFSET + ratio*(output.rows - i));
-                Y.push_back(Y_OFFSET + ratio*j);
-
-                localDistances.clear();
-
-                for(int k = 0; k < X.size() - 1; k++)
-                {
-                    distance = (X[k]-X.back())*(X[k]-X.back()) + (Y[k]-Y.back())*(Y[k]-Y.back());
-                    localDistances.push_back(distance);
-                    distances[k].push_back(distance);
-                }
-
-                localDistances.push_back(0.0);
-                distances.push_back(localDistances);
-            }
+            distance = (X[k]-X.back())*(X[k]-X.back()) + (Y[k]-Y.back())*(Y[k]-Y.back());
+            localDistances.push_back(distance);
+            distances[k].push_back(distance);
         }
+
+        localDistances.push_back(0.0);
+        distances.push_back(localDistances);
     }
 
-    //Re-organise waypoints order to reduce the overall pencil trajectory => OPTIMISATION
+    //Re-organising the waypoints order to reduce the overall pencil trajectory => OPTIMISATION
     geometry_msgs::Pose currentPose, intermediatePose;
     currentPose.position.z = height;
     currentPose.orientation = orientation;
@@ -217,14 +248,15 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     waypoints.push_back(currentPose);
 
     int currentIndex = X.size()-1;
-    std::vector<int> visitedIndex {currentIndex};
 
     std::vector<size_t> indices(X.size());
     std::iota(indices.begin(), indices.end(), 0);
 
-    while(visitedIndex.size() < X.size())
+    int jumpCounter = 0;
+
+    while(indices.size() > 1)
     {
-        //Find the next closest waypoint
+        //Finding the next closest waypoint
         localDistances = distances[currentIndex];
         localDistances.erase(localDistances.begin() + currentIndex);
 
@@ -234,7 +266,7 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
         std::stable_sort(idx.begin(), idx.end(),
             [&localDistances](size_t i1, size_t i2) {return localDistances[i1] < localDistances[i2];});
 
-        //Delete the current waypoint in the distance matrix and indices vector
+        //Deleting the current waypoint in the distance matrix and indices vector
         distances.erase(distances.begin() + currentIndex);
         for(auto& row:distances)
         {
@@ -243,29 +275,26 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
 
         indices.erase(indices.begin() + currentIndex);
 
-        //Switch to the closest waypoint
+        //Switching to the closest waypoint
         currentIndex = idx[0];
         currentPose.position.x = X[indices[currentIndex]];
         currentPose.position.y = Y[indices[currentIndex]];
 
-        //Skip waypoint if too close from the previous one
-        if((waypoints.back().position.x-currentPose.position.x)*(waypoints.back().position.x-currentPose.position.x) + (waypoints.back().position.y-currentPose.position.y)*(waypoints.back().position.y-currentPose.position.y) > 0.003*0.003)
+        if(localDistances[currentIndex] > JUMP_DISTANCE*JUMP_DISTANCE)
         {
-            if((waypoints.back().position.x-currentPose.position.x)*(waypoints.back().position.x-currentPose.position.x) + (waypoints.back().position.y-currentPose.position.y)*(waypoints.back().position.y-currentPose.position.y) > 0.01*0.01)
-            {
-                intermediatePose = waypoints.back();
-                intermediatePose.position.z += 0.02;
-                waypoints.push_back(intermediatePose);
-                intermediatePose = currentPose;
-                intermediatePose.position.z += 0.02;
-                waypoints.push_back(intermediatePose);
-            }
-
-            waypoints.push_back(currentPose);
+            intermediatePose = waypoints.back();
+            intermediatePose.position.z += 0.02;
+            waypoints.push_back(intermediatePose);
+            intermediatePose = currentPose;
+            intermediatePose.position.z += 0.02;
+            waypoints.push_back(intermediatePose);
+            jumpCounter++;
         }
 
-        visitedIndex.push_back(indices[currentIndex]);
+        waypoints.push_back(currentPose);
     }
+
+    ROS_INFO("Number of jumps : %i", jumpCounter);
 
     //imshow("Output",output);
     //waitKey();
@@ -285,7 +314,7 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     myfile.close();
     */
 
-    /*
+    
     std::map<std::string, std::string> keywords;
     keywords.insert(std::pair<std::string, std::string>("ms", "2") );
     keywords.insert(std::pair<std::string, std::string>("c", "blue") );
@@ -301,6 +330,5 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     plt::ylabel("x");
     plt::axis("equal");
     plt::show();
-    */
     
 }
