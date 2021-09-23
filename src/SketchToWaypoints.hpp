@@ -7,8 +7,8 @@
 #define X_OFFSET 0.35
 #define Y_OFFSET -0.1
 
-#define PIXEL_DISTANCE 0.003
-#define JUMP_DISTANCE 0.015
+#define PIXEL_DISTANCE 0.002
+#define JUMP_DISTANCE 0.01
 
 #include <vector>
 #include <string>
@@ -209,8 +209,8 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     }
 
     //[DISPLAY]
-    //imshow("Output",output);
-    //waitKey(); 
+    imshow("Output",output);
+    waitKey(); 
     
     //Converting pixels into waypoints
     std::vector<double> X,Y,localDistances;
