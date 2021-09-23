@@ -12,10 +12,20 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   tf2
   tf2_ros
+  rqt_gui
+  rqt_gui_cpp
 )
 
 find_package(OpenCV  REQUIRED)
 find_package(PythonLibs 2.7 REQUIRED)
+
+
+if("${qt_gui_cpp_USE_QT_MAJOR_VERSION} " STREQUAL "5 ")
+  find_package(Qt5Widgets REQUIRED)
+else()
+  find_package(Qt4 COMPONENTS QtCore QtGui REQUIRED)
+  include(${QT_USE_FILE})
+endif()
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -107,7 +117,7 @@ find_package(PythonLibs 2.7 REQUIRED)
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
+#   INCLUDE_DIRS include
 #  LIBRARIES panda_draws_you
 #  CATKIN_DEPENDS robot_arm_tools roscpp tf2 tf2_ros
 #  DEPENDS system_lib
@@ -139,7 +149,7 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(${PROJECT_NAME}_node src/CannyDeriche.hpp src/SketchToWaypoints.hpp src/panda_draws_you_node.cpp)
+add_executable(${PROJECT_NAME}_node src/CannyDeriche.hpp src/SketchToWaypoints.hpp src/panda_draws_you_node.cpp src/FileExplorer.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -156,6 +166,7 @@ target_link_libraries(${PROJECT_NAME}_node
   ${catkin_LIBRARIES}
   ${OpenCV_LIBS}
   ${PYTHON_LIBRARIES}
+  Qt5::Widgets
 )
 
 #############

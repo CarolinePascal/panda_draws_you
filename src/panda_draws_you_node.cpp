@@ -7,6 +7,8 @@
 
 #include "SketchToWaypoints.hpp"
 
+#include "panda_draws_you/FileExplorer.h"
+
 int main(int argc, char **argv)
 {
     //ROS node initialisation
@@ -32,9 +34,15 @@ int main(int argc, char **argv)
     quaternion.setRPY(M_PI,0,0);
     quaternionMsg = tf2::toMsg(quaternion);
 
+    QApplication app( argc, argv );
+    FileExplorer test(ros::package::getPath("panda_draws_you")+"/config/");
+    test.openFile();
+
+    std::string path = test.getFilePath();
+
     ROS_INFO("Starting sketch to waypoints conversion...");
 
-    sketchToWaypoints(ros::package::getPath("panda_draws_you")+"/config/Picture1.png",waypoints,-0.01,quaternionMsg);
+    sketchToWaypoints(path,waypoints,0.0,quaternionMsg);
 
     //Perform approach motion
     geometry_msgs::Pose startingPose = waypoints[0];
