@@ -71,10 +71,22 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     //Loading the input sketch
     Mat output = imread(sketchFileName,IMREAD_GRAYSCALE);
 
+    Mat test = imread(sketchFileName,IMREAD_COLOR);
+
     //[DISPLAY]
     //imshow("Output",output);
     //waitKey();
+
+    //edgePreservingFilter (test,  test);
+    stylization(test,test);
+
+    imshow("test",test);
+    waitKey();
+
+    cvtColor(test, output, COLOR_BGR2GRAY);
+
     
+
     //Edges detection : Canny-Deriche filter
 
     //Setting initial filter parameters
@@ -92,15 +104,16 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     //Displaying first output
     CannyDericheFilter(0,&parameters);
 
-    namedWindow("CannyDericheFilter", WINDOW_AUTOSIZE);
+    namedWindow("TrackBar", WINDOW_AUTOSIZE);
+    resizeWindow("TrackBar", 1000, 0);
     imshow("CannyDericheFilter", parameters.output);
 
     //Tweaking parameters...
-    createTrackbar( "Gaussian Blur:","CannyDericheFilter", &parameters.gaussianBlur, 10, CannyDericheFilter, (void*)&parameters);
-    createTrackbar( "Min Threshold:","CannyDericheFilter", &parameters.lowThreshold, 500, CannyDericheFilter, (void*)&parameters);
-    createTrackbar( "Max Threshold:", "CannyDericheFilter", &parameters.maxThreshold, 500, CannyDericheFilter, (void*)&parameters);
-    createTrackbar( "Derive:","CannyDericheFilter", &parameters.alDerive, 400, CannyDericheFilter, (void*)&parameters);
-    createTrackbar( "Mean:", "CannyDericheFilter", &parameters.alMean, 400, CannyDericheFilter, (void*)&parameters);
+    createTrackbar( "Gaussian Blur:","TrackBar", &parameters.gaussianBlur, 10, CannyDericheFilter, (void*)&parameters);
+    createTrackbar( "Min Threshold:","TrackBar", &parameters.lowThreshold, 500, CannyDericheFilter, (void*)&parameters);
+    createTrackbar( "Max Threshold:", "TrackBar", &parameters.maxThreshold, 500, CannyDericheFilter, (void*)&parameters);
+    createTrackbar( "Derive:","TrackBar", &parameters.alDerive, 400, CannyDericheFilter, (void*)&parameters);
+    createTrackbar( "Mean:", "TrackBar", &parameters.alMean, 400, CannyDericheFilter, (void*)&parameters);
 
     waitKey();   
 
