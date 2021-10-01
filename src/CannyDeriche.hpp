@@ -20,6 +20,9 @@ struct CANNY_DERICHE_PARAMETERS
 
     int gaussianBlur;
 
+    int sigma_s;
+    int sigma_r;
+
     Mat input;
     Mat output;
 };

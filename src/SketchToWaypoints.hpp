@@ -32,10 +32,9 @@ void CannyDericheFilter(int, void* pointer)
     //Pre-processing : gaussian blur
     GaussianBlur(parameters->input,parameters->output,Size(2*parameters->gaussianBlur+1,2*parameters->gaussianBlur+1),0.0);
 
-    //Pre-processing : edge-preserving filter
-    //Mat dst = output.clone();
-    //bilateralFilter(parameters->output,parameters->output,9,200,200);
-    //output = dst.clone();
+    //Pre-processing : edges-preserving filter
+    edgePreservingFilter(parameters->output,parameters->output,1,(float)parameters->sigma_s,(float)parameters->sigma_r/100.0);
+    cvtColor(parameters->output, parameters->output, COLOR_BGR2GRAY);
 
     //Computing Canny-Deriche filter
     double d=parameters->alDerive/100.0,m=parameters->alMean/100.0;
@@ -69,23 +68,12 @@ void CannyDericheFilter(int, void* pointer)
 void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Pose> &waypoints, double height, geometry_msgs::Quaternion orientation)
 {
     //Loading the input sketch
-    Mat output = imread(sketchFileName,IMREAD_GRAYSCALE);
-
-    Mat test = imread(sketchFileName,IMREAD_COLOR);
+    //Mat output = imread(sketchFileName,IMREAD_GRAYSCALE);
+    Mat output = imread(sketchFileName,IMREAD_COLOR);
 
     //[DISPLAY]
     //imshow("Output",output);
-    //waitKey();
-
-    //edgePreservingFilter (test,  test);
-    stylization(test,test);
-
-    imshow("test",test);
-    waitKey();
-
-    cvtColor(test, output, COLOR_BGR2GRAY);
-
-    
+    //waitKey(); 
 
     //Edges detection : Canny-Deriche filter
 
@@ -96,7 +84,11 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     parameters.maxThreshold=20;
     parameters.alDerive=100;
     parameters.alMean=50;
+
     parameters.gaussianBlur=1;
+
+    parameters.sigma_s = 60;
+    parameters.sigma_r = 45;
 
     parameters.input = output.clone();
     parameters.output = output.clone();
@@ -110,6 +102,10 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
 
     //Tweaking parameters...
     createTrackbar( "Gaussian Blur:","TrackBar", &parameters.gaussianBlur, 10, CannyDericheFilter, (void*)&parameters);
+
+    createTrackbar( "Sigma S:","TrackBar", &parameters.sigma_s, 200, CannyDericheFilter, (void*)&parameters);
+    createTrackbar( "Sigma R:","TrackBar", &parameters.sigma_r, 100, CannyDericheFilter, (void*)&parameters);
+
     createTrackbar( "Min Threshold:","TrackBar", &parameters.lowThreshold, 500, CannyDericheFilter, (void*)&parameters);
     createTrackbar( "Max Threshold:", "TrackBar", &parameters.maxThreshold, 500, CannyDericheFilter, (void*)&parameters);
     createTrackbar( "Derive:","TrackBar", &parameters.alDerive, 400, CannyDericheFilter, (void*)&parameters);
