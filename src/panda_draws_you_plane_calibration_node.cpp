@@ -24,7 +24,7 @@ int main(int argc, char **argv)
     visualTools.setupOptiTrack();
 
     //Move the robot to its initial configuration
-    robot.init();
+    //robot.init();
     robot.setAcceleration(0.1);
     robot.setVelocity(0.1);
 
@@ -60,9 +60,16 @@ int main(int argc, char **argv)
 
     ROS_INFO("Central calibration point : \n X : %f \n Y : %f \n Z : %f",transform.translation.x,transform.translation.y,transform.translation.z);
 
+    do 
+    {
+        ROS_INFO("Switch the robot to automatic control mode - Press enter to continue");
+    } while (std::cin.get() != '\n');
+
+    robot.triggerRobotStartup();
+
     std::vector<geometry_msgs::Pose> calibrationPoses;
-    geometry_msgs::Pose currentPose;
-    currentPose.orientation = transform.rotation;
+    geometry_msgs::Pose initialPose,currentPose;
+    initialPose.orientation = transform.rotation;
 
     tf2::Quaternion quaternion;
     tf2::fromMsg(transform.rotation,quaternion);
@@ -70,36 +77,39 @@ int main(int argc, char **argv)
 
     for(int i = 0; i < 4; i++)
     {
-        currentPose.position.x = transform.translation.x + (2*(i%2) - 1)*0.2*rotationMatrix[0][i/2] - 0.05*rotationMatrix[0][2];
-        currentPose.position.y = transform.translation.y + (2*(i%2) - 1)*0.2*rotationMatrix[1][i/2] - 0.05*rotationMatrix[1][2];
-        currentPose.position.z = transform.translation.z + (2*(i%2) - 1)*0.2*rotationMatrix[2][i/2] - 0.05*rotationMatrix[2][2];
+        initialPose.position.x = transform.translation.x + (2*(i%2) - 1)*0.2*rotationMatrix[0][i/2] - 0.05*rotationMatrix[0][2];
+        initialPose.position.y = transform.translation.y + (2*(i%2) - 1)*0.2*rotationMatrix[1][i/2] - 0.05*rotationMatrix[1][2];
+        initialPose.position.z = transform.translation.z + (2*(i%2) - 1)*0.2*rotationMatrix[2][i/2] - 0.05*rotationMatrix[2][2];
 
-        ROS_INFO("Calibration point %d : \n X : %f \n Y : %f \n Z : %f",i+1,currentPose.position.x,currentPose.position.y,currentPose.position.z);
+        ROS_INFO("Calibration point %d : \n X : %f \n Y : %f \n Z : %f",i+1,initialPose.position.x,initialPose.position.y,initialPose.position.z);
     
-        robot.goToTarget(currentPose);
+        robot.goToTarget(initialPose);
 
         double initNormalEffort = 0.0;
         for(int i = 0; i < 10; i++)
         {
-            initNormalEffort += (ros::topic::waitForMessage<geometry_msgs::WrenchStamped>("/wrench", ros::Duration(0.1))->wrench.force.z)/10;
+            initNormalEffort += ((ros::topic::waitForMessage<geometry_msgs::WrenchStamped>("/wrench", ros::Duration(1.0))->wrench).force.z)/10;
         }
 
         double currentNormalEffort = initNormalEffort;
+        currentPose = initialPose;
         
-        while(abs(currentNormalEffort - initNormalEffort) < 5.0)
+        while(abs(currentNormalEffort - initNormalEffort) < 1.0)
         {
-            currentPose.position.x += 0.01*rotationMatrix[0][2];
-            currentPose.position.y += 0.01*rotationMatrix[1][2];
-            currentPose.position.z += 0.01*rotationMatrix[2][2];
+            currentPose.position.x += 0.002*rotationMatrix[0][2];
+            currentPose.position.y += 0.002*rotationMatrix[1][2];
+            currentPose.position.z += 0.002*rotationMatrix[2][2];
 
-            robot.goToTarget(currentPose);
+            robot.goToTarget(currentPose,false,true);
 
             currentNormalEffort = 0.0;
             for(int i = 0; i < 10; i++)
             {
-                currentNormalEffort += (ros::topic::waitForMessage<geometry_msgs::WrenchStamped>("/wrench", ros::Duration(0.1))->wrench.force.z)/10;
+                currentNormalEffort += ((ros::topic::waitForMessage<geometry_msgs::WrenchStamped>("/wrench", ros::Duration(1.0))->wrench).force.z)/10;
             }
         }
+
+        robot.goToTarget(initialPose,false,true);
         calibrationPoses.push_back(currentPose);
     }
 
