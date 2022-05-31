@@ -1,14 +1,20 @@
 #pragma once
 
 #define PATCH_HALF_SIZE 2
-#define X_SIZE 0.3
-#define Y_SIZE 0.2
+#define X_SIZE 0.25
+#define Y_SIZE 0.17
 
-#define X_OFFSET 0.35
-#define Y_OFFSET -0.1
+//#define X_OFFSET 0.35
+//#define Y_OFFSET -0.1
+#define X_OFFSET 0.6
+#define Y_OFFSET -0.30
 
-#define PIXEL_DISTANCE 0.002
-#define JUMP_DISTANCE 0.01
+#define PIXEL_DISTANCE 0.0015
+#define JUMP_DISTANCE 0.005
+
+#define ELLIPSE_X_RATIO 0.7
+#define ELLIPSE_Y_RATIO 0.3
+#define CROP_RATIO 0.0
 
 #include <vector>
 #include <string>
@@ -19,6 +25,8 @@
 #include <iostream>
 #include <algorithm>
 #include <numeric>
+
+#include <ctime> 
 
 #include "CannyDeriche.hpp"
 
@@ -34,7 +42,10 @@ void CannyDericheFilter(int, void* pointer)
 
     //Pre-processing : edges-preserving filter
     edgePreservingFilter(parameters->output,parameters->output,1,(float)parameters->sigma_s,(float)parameters->sigma_r/100.0);
+    //stylization(parameters->output,parameters->output,(float)parameters->sigma_s,(float)parameters->sigma_r/100.0);
+    
     cvtColor(parameters->output, parameters->output, COLOR_BGR2GRAY);
+    equalizeHist(parameters->output,parameters->output);
 
     //Computing Canny-Deriche filter
     double d=parameters->alDerive/100.0,m=parameters->alMean/100.0;
@@ -61,19 +72,72 @@ void CannyDericheFilter(int, void* pointer)
 
     CannyBis(img, parameters->output, parameters->lowThreshold, parameters->maxThreshold, 5, true, sobel_x,sobel_y);
 
+    /*
+    int morph_size = 0;
+    Mat element = getStructuringElement(
+        MORPH_RECT,
+        Size(2 * morph_size + 1,
+             2 * morph_size + 1),
+        Point(morph_size,
+              morph_size));
+    morphologyEx(parameters->output,parameters->output,MORPH_CLOSE,element,Point(-1,-1),2);
+    */
+
     //Updating display
     imshow("CannyDericheFilter", parameters->output);
 }
 
-void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Pose> &waypoints, double height, geometry_msgs::Quaternion orientation)
+void sketchToWaypoints(std::vector<geometry_msgs::Pose> &waypoints, double height, geometry_msgs::Quaternion orientation)
 {
-    //Loading the input sketch
-    //Mat output = imread(sketchFileName,IMREAD_GRAYSCALE);
-    Mat output = imread(sketchFileName,IMREAD_COLOR);
+    /*VideoCapture capture(0);
+    if (!capture.isOpened()) 
+    {
+        ROS_ERROR("Cannot open video capture device !");
+        throw std::runtime_error("Cannot open video capture device !");   
+    }
+
+    capture.set(CV_CAP_PROP_FRAME_WIDTH,1920);
+    capture.set(CV_CAP_PROP_FRAME_HEIGHT,1080);
+
+    // Prepare an image where to store the video frames
+    Mat image, display_image;
+
+    // Main loop
+    while (capture.read(image) && !image.empty()) 
+    {
+        // Show the captured image and the detected features
+        display_image = image.clone();
+        ellipse(display_image, Point(image.cols/2,image.rows/2), Size(image.cols*ELLIPSE_Y_RATIO/2, image.rows*ELLIPSE_X_RATIO/2), 0, 0, 360, Scalar(0, 0, 255), 2, LINE_AA);
+        imshow("FaceDetection", display_image);
+
+        int cropY = (int)floor(floor((image.cols*ELLIPSE_Y_RATIO + image.cols*CROP_RATIO)/Y_SIZE)*Y_SIZE);
+        int cropX = (int)floor(floor((image.rows*ELLIPSE_X_RATIO + image.rows*CROP_RATIO)/X_SIZE)*X_SIZE);
+
+        Rect crop(image.cols/2 - cropY/2, image.rows/2 - cropX/2, cropY, cropX);
+
+        // Wait for input or process the next frame      
+        if((int)waitKey(10) == 10)
+        {
+            std::time_t t = std::time(0);
+            std::tm* now = std::localtime(&t);
+            image = image(crop);
+            imwrite(ros::package::getPath("panda_draws_you") + "/config/ScienceDay/Picture_"+std::to_string(now->tm_mday)+"_"+std::to_string(now->tm_hour)+"_"+std::to_string(now->tm_min)+".png", image);
+            break;
+        }
+    }
+
+    capture.release();
+    destroyAllWindows();
+
+    Mat output = image.clone();*/
+
+    //Mat output = imread(ros::package::getPath("panda_draws_you") + "/config/ScienceDay/"+ "Picture_9_17_7.png",IMREAD_COLOR);
+    Mat output = imread("/home/student/Downloads/heart.png",IMREAD_COLOR);
+    
 
     //[DISPLAY]
     //imshow("Output",output);
-    //waitKey(); 
+    //waitKey();
 
     //Edges detection : Canny-Deriche filter
 
@@ -95,23 +159,23 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
 
     //Displaying first output
     CannyDericheFilter(0,&parameters);
-
-    namedWindow("TrackBar", WINDOW_AUTOSIZE);
-    resizeWindow("TrackBar", 1000, 0);
-    imshow("CannyDericheFilter", parameters.output);
-
+           
     //Tweaking parameters...
-    createTrackbar( "Gaussian Blur:","TrackBar", &parameters.gaussianBlur, 10, CannyDericheFilter, (void*)&parameters);
+    Mat dummy = Mat::zeros(Size(1000,1),CV_8UC1);
+    imshow("Parameters",dummy);
 
-    createTrackbar( "Sigma S:","TrackBar", &parameters.sigma_s, 200, CannyDericheFilter, (void*)&parameters);
-    createTrackbar( "Sigma R:","TrackBar", &parameters.sigma_r, 100, CannyDericheFilter, (void*)&parameters);
+    createTrackbar("Gaussian Blur:","Parameters", &parameters.gaussianBlur, 10, CannyDericheFilter, (void*)&parameters);
 
-    createTrackbar( "Min Threshold:","TrackBar", &parameters.lowThreshold, 500, CannyDericheFilter, (void*)&parameters);
-    createTrackbar( "Max Threshold:", "TrackBar", &parameters.maxThreshold, 500, CannyDericheFilter, (void*)&parameters);
-    createTrackbar( "Derive:","TrackBar", &parameters.alDerive, 400, CannyDericheFilter, (void*)&parameters);
-    createTrackbar( "Mean:", "TrackBar", &parameters.alMean, 400, CannyDericheFilter, (void*)&parameters);
+    createTrackbar("Sigma S:","Parameters", &parameters.sigma_s, 200, CannyDericheFilter, (void*)&parameters);
+    createTrackbar("Sigma R:","Parameters", &parameters.sigma_r, 100, CannyDericheFilter, (void*)&parameters);
 
-    waitKey();   
+    createTrackbar("Min Threshold:","Parameters", &parameters.lowThreshold, 500, CannyDericheFilter, (void*)&parameters);
+    createTrackbar("Max Threshold:", "Parameters", &parameters.maxThreshold, 500, CannyDericheFilter, (void*)&parameters);
+    createTrackbar("Derive:","Parameters", &parameters.alDerive, 400, CannyDericheFilter, (void*)&parameters);
+    createTrackbar("Mean:", "Parameters", &parameters.alMean, 400, CannyDericheFilter, (void*)&parameters);
+
+    waitKey(); 
+    destroyAllWindows();
 
     output = parameters.output.clone();
 
@@ -148,7 +212,8 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     int minRow = max(0, columnId.front().y - 1), maxRow = min(output.rows - 1, columnId.back().y + 1);
 
     Rect crop(minCol, minRow, maxCol-minCol, maxRow-minRow);
-    output = output(crop);  
+    output = output(crop); 
+
     double ratio = min(X_SIZE/(maxRow-minRow),Y_SIZE/(maxCol-minCol));
 
     //[DISPLAY]
@@ -220,6 +285,7 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     //[DISPLAY]
     imshow("Output",output);
     waitKey(); 
+    destroyAllWindows();
     
     //Converting pixels into waypoints
     std::vector<double> X,Y,localDistances;
@@ -249,10 +315,13 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
 
     //Re-organising the waypoints order to reduce the overall pencil trajectory => OPTIMISATION
     geometry_msgs::Pose currentPose, intermediatePose;
-    currentPose.position.z = height;
+    //currentPose.position.z = height;
+    currentPose.position.x = height;
     currentPose.orientation = orientation;
 
-    currentPose.position.x = X.back();
+    //currentPose.position.x = X.back();
+    //currentPose.position.y = Y.back();
+    currentPose.position.z = X.back();
     currentPose.position.y = Y.back();
     waypoints.push_back(currentPose);
 
@@ -286,16 +355,20 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
 
         //Switching to the closest waypoint
         currentIndex = idx[0];
-        currentPose.position.x = X[indices[currentIndex]];
+        //currentPose.position.x = X[indices[currentIndex]];
+        //currentPose.position.y = Y[indices[currentIndex]];
+        currentPose.position.z = X[indices[currentIndex]];
         currentPose.position.y = Y[indices[currentIndex]];
 
         if(localDistances[currentIndex] > JUMP_DISTANCE*JUMP_DISTANCE)
         {
             intermediatePose = waypoints.back();
-            intermediatePose.position.z += 0.02;
+            //intermediatePose.position.z += 0.02;
+            intermediatePose.position.x -= 0.02;
             waypoints.push_back(intermediatePose);
             intermediatePose = currentPose;
-            intermediatePose.position.z += 0.02;
+            //intermediatePose.position.z += 0.02;
+            intermediatePose.position.x -= 0.02;
             waypoints.push_back(intermediatePose);
             jumpCounter++;
         }
@@ -323,7 +396,6 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
     myfile.close();
     */
 
-    
     std::map<std::string, std::string> keywords;
     keywords.insert(std::pair<std::string, std::string>("ms", "2") );
     keywords.insert(std::pair<std::string, std::string>("c", "blue") );
@@ -332,7 +404,8 @@ void sketchToWaypoints(std::string sketchFileName, std::vector<geometry_msgs::Po
 
     for(int i = 0; i < waypoints.size(); i++)
     {
-        plt::plot(std::vector<double> {waypoints[i].position.y},std::vector<double> {waypoints[i].position.x}, keywords);
+        //plt::plot(std::vector<double> {waypoints[i].position.y},std::vector<double> {waypoints[i].position.x}, keywords);
+        plt::plot(std::vector<double> {waypoints[i].position.y},std::vector<double> {waypoints[i].position.z}, keywords);
     }
 
     plt::xlabel("y");

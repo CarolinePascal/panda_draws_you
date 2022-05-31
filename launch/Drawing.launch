@@ -2,16 +2,20 @@
 <launch>
 
     <!-- GENERAL ARGUMENTS -->
-    <arg name="robot" default="panda"/>
+    <arg name="robot_name" default="ur10e"/>
+    <arg name="tool_name" default="pencil"/>
     <arg name="simulation" default="true"/>
 
     <!-- ROBOT SETUP -->
-    <include file="$(find robot_arm_tools)/launch/Setup_$(arg robot).launch">
+    <include file="$(find robot_arm_tools)/launch/Setup_$(arg robot_name).launch">
+        <arg name="tool_name" value="$(arg tool_name)"/>
         <arg name="simulation" value="$(arg simulation)"/>
-        <arg name="load_pencil" value="true" />
-    </include>
+    </include> 
 
     <!-- MAIN NODE -->
     <node pkg="panda_draws_you" type="panda_draws_you_node" name="rpanda_draws_you_node" output="screen"/>
+
+    <!-- Run Rviz -->
+    <node type="rviz" name="rviz" pkg="rviz" args="-d $(find robot_arm_tools)/config/DefaultSetup.rviz"/>  <!-- Customisable RViz configuration -->
 
 </launch>
