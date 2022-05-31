@@ -149,7 +149,8 @@ include_directories(
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(${PROJECT_NAME}_node src/CannyDeriche.hpp src/SketchToWaypoints.hpp src/panda_draws_you_node.cpp src/FileExplorer.cpp)
+add_executable(${PROJECT_NAME}_node src/CannyDeriche.hpp src/SketchToWaypoints.hpp src/${PROJECT_NAME}_node.cpp src/FileExplorer.cpp)
+add_executable(${PROJECT_NAME}_plane_calibration_node src/${PROJECT_NAME}_plane_calibration_node.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -167,6 +168,11 @@ target_link_libraries(${PROJECT_NAME}_node
   ${OpenCV_LIBS}
   ${PYTHON_LIBRARIES}
   Qt5::Widgets
+)
+
+target_link_libraries(${PROJECT_NAME}_plane_calibration_node
+  ${catkin_LIBRARIES}
+  yaml-cpp
 )
 
 #############

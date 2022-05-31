@@ -1,5 +1,4 @@
 
-#include <ros/ros.h>
 #include <robot_arm_tools/Robot.h>
 #include <robot_arm_tools/RobotVisualTools.h>
 
