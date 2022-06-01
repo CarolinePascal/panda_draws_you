@@ -6,6 +6,8 @@
 
 #include <yaml-cpp/yaml.h>
 
+#include <Eigen/QR>
+
 //std::vector<double> getPlaneEquation(std::vector<geometry_msgs::) 
 
 int main(int argc, char **argv)
@@ -67,7 +69,6 @@ int main(int argc, char **argv)
 
     robot.triggerRobotStartup();
 
-    std::vector<geometry_msgs::Pose> calibrationPoses;
     geometry_msgs::Pose initialPose,currentPose;
     initialPose.orientation = transform.rotation;
 
@@ -75,11 +76,13 @@ int main(int argc, char **argv)
     tf2::fromMsg(transform.rotation,quaternion);
     tf2::Matrix3x3 rotationMatrix = tf2::Matrix3x3(quaternion);
 
+    Eigen::MatrixXd A(4,3);
+
     for(int i = 0; i < 4; i++)
     {
-        initialPose.position.x = transform.translation.x + (2*(i%2) - 1)*0.2*rotationMatrix[0][i/2] - 0.05*rotationMatrix[0][2];
-        initialPose.position.y = transform.translation.y + (2*(i%2) - 1)*0.2*rotationMatrix[1][i/2] - 0.05*rotationMatrix[1][2];
-        initialPose.position.z = transform.translation.z + (2*(i%2) - 1)*0.2*rotationMatrix[2][i/2] - 0.05*rotationMatrix[2][2];
+        initialPose.position.x = transform.translation.x - (2*(i%2) - 1)*0.2*rotationMatrix[0][i/2] - 0.05*rotationMatrix[0][2];
+        initialPose.position.y = transform.translation.y - (2*(i%2) - 1)*0.2*rotationMatrix[1][i/2] - 0.05*rotationMatrix[1][2];
+        initialPose.position.z = transform.translation.z - (2*(i%2) - 1)*0.2*rotationMatrix[2][i/2] - 0.05*rotationMatrix[2][2];
 
         ROS_INFO("Calibration point %d : \n X : %f \n Y : %f \n Z : %f",i+1,initialPose.position.x,initialPose.position.y,initialPose.position.z);
     
@@ -110,27 +113,59 @@ int main(int argc, char **argv)
         }
 
         robot.goToTarget(initialPose,false,true);
-        calibrationPoses.push_back(currentPose);
+        A.row(0) << currentPose.position.x,currentPose.position.y,currentPose.position.z;
     }
 
-    //Save reference position
-    /*std::string yamlFile = ros::package::getPath("panda_draws_you")+"/config/PlaneCalibration.yaml";
+    Eigen::MatrixXd pinvA = A.completeOrthogonalDecomposition().pseudoInverse();
+    Eigen::Vector3d v(1,1,1);
+    Eigen::Vector3d planeEquation = pinvA*v;
+
+    planeEquation /= sqrt(planeEquation.head(3).squaredNorm());
+    Eigen::Vector3d planeNormal = planeEquation.head(3);
+
+    Eigen::Vector3d planePoint(0,0,0);
+    int argMaxPlaneNormal = planeNormal.array().abs().maxCoeff();
+    planePoint(argMaxPlaneNormal) = -planeEquation(3)/planeNormal(argMaxPlaneNormal);
+
+    Eigen::Vector3d planeCenter(transform.translation.x,transform.translation.y,transform.translation.z);
+    planeCenter = planeCenter - ((planeCenter - planePoint)*planeNormal.transpose())*planeNormal;
+
+    Eigen::Vector3d xAxis = Eigen::Vector3d(planeEquation(1),-planeEquation(0),0);
+    xAxis /= sqrt(xAxis.squaredNorm());
+
+    Eigen::Vector3d yAxis = planeNormal.cross(xAxis);
+
+    //Save plane equation
+    std::string yamlFile = ros::package::getPath("panda_draws_you")+"/config/PlaneCalibration.yaml";
 
     YAML::Node config = YAML::LoadFile(yamlFile);
     std::ofstream fout(yamlFile);
 
-    if (config["poseReference"]) 
+    if (config["xAxis"]) 
     {
-        config.remove("poseReference");
-        config["poseReference"].push_back(transform.translation.x);
-        config["poseReference"].push_back(transform.translation.y);
-        config["poseReference"].push_back(transform.translation.z);
-        config["poseReference"].push_back(roll);
-        config["poseReference"].push_back(pitch);
-        config["poseReference"].push_back(yaw);
+        config.remove("xAxis");
+        config["xAxis"].push_back(xAxis(0));
+        config["xAxis"].push_back(xAxis(1));
+        config["xAxis"].push_back(xAxis(2));
     }
 
-    fout << config;*/
+    if (config["yAxis"]) 
+    {
+        config.remove("yAxis");
+        config["yAxis"].push_back(yAxis(0));
+        config["yAxis"].push_back(yAxis(1));
+        config["yAxis"].push_back(yAxis(2));
+    }
+
+    if (config["zAxis"]) 
+    {
+        config.remove("zAxis");
+        config["zAxis"].push_back(planeNormal(0));
+        config["zAxis"].push_back(planeNormal(1));
+        config["zAxis"].push_back(planeNormal(2));
+    }
+
+    fout << config;
 
     ros::waitForShutdown();
     return 0;
