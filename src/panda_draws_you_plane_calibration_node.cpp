@@ -5,6 +5,7 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 #include <yaml-cpp/yaml.h>
+#include <fstream>
 
 #include <Eigen/QR>
 
@@ -113,7 +114,7 @@ int main(int argc, char **argv)
         }
 
         robot.goToTarget(initialPose,false,true);
-        A.row(0) << currentPose.position.x,currentPose.position.y,currentPose.position.z;
+        A.row(i) << currentPose.position.x,currentPose.position.y,currentPose.position.z;
     }
 
     Eigen::MatrixXd pinvA = A.completeOrthogonalDecomposition().pseudoInverse();
@@ -137,34 +138,43 @@ int main(int argc, char **argv)
 
     //Save plane equation
     std::string yamlFile = ros::package::getPath("panda_draws_you")+"/config/PlaneCalibration.yaml";
+    YAML::Node config;
 
-    YAML::Node config = YAML::LoadFile(yamlFile);
-    std::ofstream fout(yamlFile);
+    try
+    {
+        config = YAML::LoadFile(yamlFile);
+    }
+    catch(const std::exception& e)
+    {
+        std::ofstream {yamlFile};
+        config = YAML::LoadFile(yamlFile);
+    } 
 
     if (config["xAxis"]) 
     {
         config.remove("xAxis");
-        config["xAxis"].push_back(xAxis(0));
-        config["xAxis"].push_back(xAxis(1));
-        config["xAxis"].push_back(xAxis(2));
     }
+    config["xAxis"].push_back(xAxis(0));
+    config["xAxis"].push_back(xAxis(1));
+    config["xAxis"].push_back(xAxis(2));  
 
     if (config["yAxis"]) 
     {
         config.remove("yAxis");
-        config["yAxis"].push_back(yAxis(0));
-        config["yAxis"].push_back(yAxis(1));
-        config["yAxis"].push_back(yAxis(2));
     }
+    config["yAxis"].push_back(yAxis(0));
+    config["yAxis"].push_back(yAxis(1));
+    config["yAxis"].push_back(yAxis(2));
 
     if (config["zAxis"]) 
     {
         config.remove("zAxis");
-        config["zAxis"].push_back(planeNormal(0));
-        config["zAxis"].push_back(planeNormal(1));
-        config["zAxis"].push_back(planeNormal(2));
     }
+    config["zAxis"].push_back(planeNormal(0));
+    config["zAxis"].push_back(planeNormal(1));
+    config["zAxis"].push_back(planeNormal(2));
 
+    std::ofstream fout(yamlFile); 
     fout << config;
 
     ros::waitForShutdown();
