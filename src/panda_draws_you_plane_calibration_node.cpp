@@ -91,9 +91,9 @@ int main(int argc, char **argv)
 
     for(int i = 0; i < 4; i++)
     {
-        initialPose.position.x = transform.translation.x - (2*(i%2) - 1)*0.2*rotationMatrix[0][i/2] - 0.05*rotationMatrix[0][2];
-        initialPose.position.y = transform.translation.y - (2*(i%2) - 1)*0.2*rotationMatrix[1][i/2] - 0.05*rotationMatrix[1][2];
-        initialPose.position.z = transform.translation.z - (2*(i%2) - 1)*0.2*rotationMatrix[2][i/2] - 0.05*rotationMatrix[2][2];
+        initialPose.position.x = transform.translation.x - (2*(i%2) - 1)*0.2*rotationMatrix[0][i/2];
+        initialPose.position.y = transform.translation.y - (2*(i%2) - 1)*0.2*rotationMatrix[1][i/2];
+        initialPose.position.z = transform.translation.z - (2*(i%2) - 1)*0.2*rotationMatrix[2][i/2];
 
         ROS_INFO("Calibration point %d : \n X : %f \n Y : %f \n Z : %f",i+1,initialPose.position.x,initialPose.position.y,initialPose.position.z);
     
@@ -110,7 +110,7 @@ int main(int argc, char **argv)
     
         while(abs(currentNormalEffort - initNormalEffort) < 1.0)
         {
-            currentNormalEffort = (ros::topic::waitForMessage<geometry_msgs::WrenchStamped>("/wrench", ros::Duration(1.0))->wrench).force.z;
+            currrentNormalEffort = (ros::topic::waitForMessage<geometry_msgs::WrenchStamped>("/wrench", ros::Duration(1.0))->wrench).force.z;
         }
 
         twistCommand.header.stamp = ros::Time::now();
