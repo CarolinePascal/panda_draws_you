@@ -9,6 +9,8 @@
 
 #include <Eigen/QR>
 
+#include <geometry_msgs/TwistStamped.h>
+
 //std::vector<double> getPlaneEquation(std::vector<geometry_msgs::) 
 
 int main(int argc, char **argv)
@@ -70,7 +72,7 @@ int main(int argc, char **argv)
 
     robot.triggerRobotStartup();
 
-    geometry_msgs::Pose initialPose,currentPose;
+    geometry_msgs::Pose initialPose;
     initialPose.orientation = transform.rotation;
 
     tf2::Quaternion quaternion;
@@ -78,6 +80,14 @@ int main(int argc, char **argv)
     tf2::Matrix3x3 rotationMatrix = tf2::Matrix3x3(quaternion);
 
     Eigen::MatrixXd A(4,3);
+
+    //Switch to position controller instead of trajectory controller
+    robot.switchController({"joint_group_pos_controller"},{"pos_joint_traj_controller","scaled_pos_joint_traj_controller"});
+
+    ros::Publisher twistCommandPublisher = n.advertise<geometry_msgs::TwistStamped>("servo_server/delta_twist_cmds", 10);
+    geometry_msgs::TwistStamped twistCommand;
+
+    double initNormalEffort, currentNormalEffort;
 
     for(int i = 0; i < 4; i++)
     {
@@ -89,32 +99,40 @@ int main(int argc, char **argv)
     
         robot.goToTarget(initialPose);
 
-        double initNormalEffort = 0.0;
-        for(int i = 0; i < 10; i++)
-        {
-            initNormalEffort += ((ros::topic::waitForMessage<geometry_msgs::WrenchStamped>("/wrench", ros::Duration(1.0))->wrench).force.z)/10;
-        }
+        initNormalEffort = (ros::topic::waitForMessage<geometry_msgs::WrenchStamped>("/wrench", ros::Duration(1.0))->wrench).force.z;
+        currentNormalEffort = initNormalEffort;
 
-        double currentNormalEffort = initNormalEffort;
-        currentPose = initialPose;
-        
+        twistCommand.header.stamp = ros::Time::now();
+        twistCommand.twist.linear.x = 0.01*rotationMatrix[0][2];
+        twistCommand.twist.linear.y = 0.01*rotationMatrix[1][2];
+        twistCommand.twist.linear.z = 0.01*rotationMatrix[2][2];
+        twistCommandPublisher.publish(twistCommand);
+    
         while(abs(currentNormalEffort - initNormalEffort) < 1.0)
         {
-            currentPose.position.x += 0.002*rotationMatrix[0][2];
-            currentPose.position.y += 0.002*rotationMatrix[1][2];
-            currentPose.position.z += 0.002*rotationMatrix[2][2];
-
-            robot.goToTarget(currentPose,false,true);
-
-            currentNormalEffort = 0.0;
-            for(int i = 0; i < 10; i++)
-            {
-                currentNormalEffort += ((ros::topic::waitForMessage<geometry_msgs::WrenchStamped>("/wrench", ros::Duration(1.0))->wrench).force.z)/10;
-            }
+            currentNormalEffort = (ros::topic::waitForMessage<geometry_msgs::WrenchStamped>("/wrench", ros::Duration(1.0))->wrench).force.z;
         }
 
+        twistCommand.header.stamp = ros::Time::now();
+        twistCommand.twist.linear.x = 0.0;
+        twistCommand.twist.linear.y = 0.0;
+        twistCommand.twist.linear.z = 0.0;
+        twistCommandPublisher.publish(twistCommand);
+
+        try
+        {
+            transform = tfBuffer.lookupTransform("world", endEffectorName, ros::Time(0), ros::Duration(5.0)).transform;
+        } 
+        catch (tf2::TransformException &ex) 
+        {
+            throw std::runtime_error("CANNOT RETRIVE SEEKED TRANSFORM !");
+        }
+
+        //Switch to position controller instead of trajectory controller
+        robot.switchController({"pos_joint_traj_controller","scaled_pos_joint_traj_controller"},{"joint_group_pos_controller"});
+    
         robot.goToTarget(initialPose,false,true);
-        A.row(i) << currentPose.position.x,currentPose.position.y,currentPose.position.z;
+        A.row(i) << transform.translation.x,transform.translation.y,transform.translation.z;
     }
 
     Eigen::MatrixXd pinvA = A.completeOrthogonalDecomposition().pseudoInverse();
