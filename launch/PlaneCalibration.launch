@@ -11,8 +11,8 @@
     </include> 
 
     <!-- MAIN NODE -->
-    <node pkg="panda_draws_you" type="panda_draws_you_node" name="panda_draws_you_node" output="screen"/>
-
+    <node pkg="panda_draws_you" type="panda_draws_you_plane_calibration_node" name="panda_draws_you_plane_calibration_node" output="screen"/> 
+    
     <!-- Run Rviz -->
     <node type="rviz" name="rviz" pkg="rviz" args="-d $(find robot_arm_tools)/config/DefaultSetup.rviz"/>  <!-- Customisable RViz configuration -->
 
