@@ -23,13 +23,13 @@ int main(int argc, char **argv)
 
     //Robot initialisation
     Robot robot;
+    //Move the robot to its initial configuration
+    //robot.init();
 
     //Robot visual tools initialisation
     RobotVisualTools visualTools;
     visualTools.setupOptiTrack();
 
-    //Move the robot to its initial configuration
-    //robot.init();
     robot.setAcceleration(0.1);
     robot.setVelocity(0.1);
 
@@ -71,9 +71,14 @@ int main(int argc, char **argv)
     } while (std::cin.get() != '\n');
 
     robot.triggerRobotStartup();
+    ros::WallDuration(1.0).sleep();
 
-    geometry_msgs::Pose initialPose;
-    initialPose.orientation = transform.rotation;
+    geometry_msgs::Pose centralPose, calibrationPose;
+    centralPose.orientation = transform.rotation;
+    centralPose.position.x = transform.translation.x;
+    centralPose.position.y = transform.translation.y;
+    centralPose.position.z = transform.translation.z;
+    calibrationPose = centralPose;
 
     tf2::Quaternion quaternion;
     tf2::fromMsg(transform.rotation,quaternion);
@@ -81,36 +86,39 @@ int main(int argc, char **argv)
 
     Eigen::MatrixXd A(4,3);
 
-    //Switch to position controller instead of trajectory controller
-    robot.switchController({"joint_group_pos_controller"},{"pos_joint_traj_controller","scaled_pos_joint_traj_controller"});
-
-    ros::Publisher twistCommandPublisher = n.advertise<geometry_msgs::TwistStamped>("servo_server/delta_twist_cmds", 10);
+    ros::Publisher twistCommandPublisher = n.advertise<geometry_msgs::TwistStamped>("/servo_server/delta_twist_cmds", 10);
     geometry_msgs::TwistStamped twistCommand;
 
     double initNormalEffort, currentNormalEffort;
 
     for(int i = 0; i < 4; i++)
     {
-        initialPose.position.x = transform.translation.x - (2*(i%2) - 1)*0.2*rotationMatrix[0][i/2];
-        initialPose.position.y = transform.translation.y - (2*(i%2) - 1)*0.2*rotationMatrix[1][i/2];
-        initialPose.position.z = transform.translation.z - (2*(i%2) - 1)*0.2*rotationMatrix[2][i/2];
+        calibrationPose.position.x = centralPose.position.x - (2*(i%2) - 1)*0.2*rotationMatrix[0][i/2];
+        calibrationPose.position.y = centralPose.position.y - (2*(i%2) - 1)*0.2*rotationMatrix[1][i/2];
+        calibrationPose.position.z = centralPose.position.z - (2*(i%2) - 1)*0.2*rotationMatrix[2][i/2];
 
-        ROS_INFO("Calibration point %d : \n X : %f \n Y : %f \n Z : %f",i+1,initialPose.position.x,initialPose.position.y,initialPose.position.z);
+        ROS_INFO("Calibration point %d : \n X : %f \n Y : %f \n Z : %f",i+1,calibrationPose.position.x,calibrationPose.position.y,calibrationPose.position.z);
     
-        robot.goToTarget(initialPose);
+        robot.goToTarget(calibrationPose,false);
 
         initNormalEffort = (ros::topic::waitForMessage<geometry_msgs::WrenchStamped>("/wrench", ros::Duration(1.0))->wrench).force.z;
         currentNormalEffort = initNormalEffort;
 
+        //Switch to position controller instead of trajectory controller
+        robot.switchController({"joint_group_pos_controller"},{"scaled_pos_joint_traj_controller"});
+        ros::WallDuration(1.0).sleep();
+
         twistCommand.header.stamp = ros::Time::now();
-        twistCommand.twist.linear.x = 0.01*rotationMatrix[0][2];
-        twistCommand.twist.linear.y = 0.01*rotationMatrix[1][2];
-        twistCommand.twist.linear.z = 0.01*rotationMatrix[2][2];
+        twistCommand.twist.linear.x = 0.075*rotationMatrix[0][2];
+        twistCommand.twist.linear.y = 0.075*rotationMatrix[1][2];
+        twistCommand.twist.linear.z = 0.075*rotationMatrix[2][2];
         twistCommandPublisher.publish(twistCommand);
     
-        while(abs(currentNormalEffort - initNormalEffort) < 1.0)
+        while(abs(currentNormalEffort - initNormalEffort) < 2.0)
         {
-            currrentNormalEffort = (ros::topic::waitForMessage<geometry_msgs::WrenchStamped>("/wrench", ros::Duration(1.0))->wrench).force.z;
+            twistCommand.header.stamp = ros::Time::now();
+            twistCommandPublisher.publish(twistCommand);
+            currentNormalEffort = (ros::topic::waitForMessage<geometry_msgs::WrenchStamped>("/wrench", ros::Duration(1.0))->wrench).force.z;
         }
 
         twistCommand.header.stamp = ros::Time::now();
@@ -129,25 +137,31 @@ int main(int argc, char **argv)
         }
 
         //Switch to position controller instead of trajectory controller
-        robot.switchController({"pos_joint_traj_controller","scaled_pos_joint_traj_controller"},{"joint_group_pos_controller"});
-    
-        robot.goToTarget(initialPose,false,true);
+        robot.switchController({"scaled_pos_joint_traj_controller"},{"joint_group_pos_controller"});
+        ros::WallDuration(1.0).sleep();
+
+        robot.goToTarget(calibrationPose,false);
         A.row(i) << transform.translation.x,transform.translation.y,transform.translation.z;
     }
 
+    robot.goToTarget(centralPose,false);
+
     Eigen::MatrixXd pinvA = A.completeOrthogonalDecomposition().pseudoInverse();
-    Eigen::Vector3d v(1,1,1);
-    Eigen::Vector3d planeEquation = pinvA*v;
+
+    Eigen::Vector4d v(-1.0,-1.0,-1.0,-1.0);
+    Eigen::Vector4d planeEquation;
+    planeEquation  << pinvA*v, 1;
 
     planeEquation /= sqrt(planeEquation.head(3).squaredNorm());
     Eigen::Vector3d planeNormal = planeEquation.head(3);
 
-    Eigen::Vector3d planePoint(0,0,0);
+    Eigen::Vector3d planePoint(0.0,0.0,0.0);
     int argMaxPlaneNormal = planeNormal.array().abs().maxCoeff();
     planePoint(argMaxPlaneNormal) = -planeEquation(3)/planeNormal(argMaxPlaneNormal);
 
     Eigen::Vector3d planeCenter(transform.translation.x,transform.translation.y,transform.translation.z);
-    planeCenter = planeCenter - ((planeCenter - planePoint)*planeNormal.transpose())*planeNormal;
+    
+    planeCenter = planeCenter - ((planeCenter - planePoint).transpose()*planeNormal)*planeNormal;
 
     Eigen::Vector3d xAxis = Eigen::Vector3d(planeEquation(1),-planeEquation(0),0);
     xAxis /= sqrt(xAxis.squaredNorm());
@@ -191,6 +205,14 @@ int main(int argc, char **argv)
     config["zAxis"].push_back(planeNormal(0));
     config["zAxis"].push_back(planeNormal(1));
     config["zAxis"].push_back(planeNormal(2));
+
+    if (config["centerPoint"]) 
+    {
+        config.remove("centerPoint");
+    }
+    config["centerPoint"].push_back(planeCenter(0));
+    config["centerPoint"].push_back(planeCenter(1));
+    config["centerPoint"].push_back(planeCenter(2));
 
     std::ofstream fout(yamlFile); 
     fout << config;
