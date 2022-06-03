@@ -1,6 +1,7 @@
 
 #include <robot_arm_tools/Robot.h>
 #include <robot_arm_tools/RobotVisualTools.h>
+#include <robot_arm_tools/RobotTrajectories.h>
 
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
@@ -23,38 +24,64 @@ int main(int argc, char **argv)
     RobotVisualTools visualTools;
     visualTools.setupOptiTrack();
 
-    //Move the robot to its initial configuration
+    //Initialisation + setting up velocity and acceleration
     robot.init();
     robot.setAcceleration(0.1);
     robot.setVelocity(0.1);
 
     //Create waypoints
     std::vector<geometry_msgs::Pose> waypoints;
+    sketchToWaypoints(waypoints);
 
-    tf2::Quaternion quaternion;
-    geometry_msgs::Quaternion quaternionMsg;
-    //quaternion.setRPY(M_PI,0,0);
-    quaternion.setRPY(0,M_PI/2,0);
-    quaternionMsg = tf2::toMsg(quaternion);
-    
-    //QApplication app(argc,argv);
-    //FileExplorer explorer(ros::package::getPath("panda_draws_you")+"/config/ScienceDay");
-    //explorer.openFile();
-    //std::string path = explorer.getFilePath();
+    //Retreive drawing plane specifications
+    ros::NodeHandle nh;
+    std::vector<double> xAxis,yAxis,zAxis,centerPoint;
 
-    //sketchToWaypoints(waypoints,-0.01,quaternionMsg);
-    sketchToWaypoints(waypoints,1.03,quaternionMsg);
+    if(!nh.getParam("xAxis", xAxis))
+    {
+        ROS_ERROR("Unable to retrieve drawing plane data !");
+        throw std::runtime_error("MISSING PARAMETER");
+    }
+    if(!nh.getParam("yAxis", yAxis))
+    {
+        ROS_ERROR("Unable to retrieve drawing plane data !");
+        throw std::runtime_error("MISSING PARAMETER");
+    }
+
+    if(!nh.getParam("zAxis", zAxis))
+    {
+        ROS_ERROR("Unable to retrieve drawing plane data !");
+        throw std::runtime_error("MISSING PARAMETER");
+    }
+    if(!nh.getParam("centerPoint", centerPoint))
+    {
+        ROS_ERROR("Unable to retrieve drawing plane data !");
+        throw std::runtime_error("MISSING PARAMETER");
+    }
+
+    tf2::Matrix3x3 rotationMatrix = tf2::Matrix3x3(xAxis[0],yAxis[0],zAxis[0],xAxis[1],yAxis[1],zAxis[1],xAxis[2],yAxis[2],zAxis[2]);
+    double roll,pitch,yaw;
+    rotationMatrix.getRPY(roll,pitch,yaw);
+
+    translateTrajectory(waypoints,-X_SIZE/2,-Y_SIZE/2,0.0);
+    geometry_msgs::Point zero;
+    zero.x = 0.0;
+    zero.y = 0.0;
+    zero.z = 0.0;
+    rotateTrajectory(waypoints,zero,roll,pitch,yaw);
+    translateTrajectory(waypoints,centerPoint[0],centerPoint[1],centerPoint[2]);
 
     //Perform approach motion
     geometry_msgs::Pose startingPose = waypoints[0];
+    startingPose.position.x -= 0.1*zAxis[0];
+    startingPose.position.y -= 0.1*zAxis[1];
+    startingPose.position.z -= 0.1*zAxis[2];
+    robot.goToTarget(startingPose,false);
 
-    //startingPose.position.z += 0.02;
-    startingPose.position.x -= 0.1;
-    robot.goToTarget(startingPose);
-
-    //startingPose.position.z -= 0.02;
-    startingPose.position.x += 0.1;
-    robot.goToTarget(startingPose);
+    startingPose.position.x += 0.1*zAxis[0];
+    startingPose.position.y += 0.1*zAxis[1];
+    startingPose.position.z += 0.1*zAxis[2];
+    robot.goToTarget(startingPose,false);
 
     //Perform trajectory
     ROS_INFO("Starting robot trajectory computation...");
@@ -62,8 +89,9 @@ int main(int argc, char **argv)
 
     //Perform retreat motion
     geometry_msgs::Pose endingPose = robot.getCurrentPose();
-    //endingPose.position.z += 0.02;
-    endingPose.position.x -= 0.02;
+    endingPose.position.x -= 0.1*zAxis[0];
+    endingPose.position.y -= 0.1*zAxis[1];
+    endingPose.position.z -= 0.1*zAxis[2];
     robot.goToTarget(endingPose);
 
     robot.init(false);

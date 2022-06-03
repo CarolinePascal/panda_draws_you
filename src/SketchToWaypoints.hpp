@@ -1,19 +1,14 @@
 #pragma once
 
 #define PATCH_HALF_SIZE 2
-#define X_SIZE 0.25
-#define Y_SIZE 0.17
-
-//#define X_OFFSET 0.35
-//#define Y_OFFSET -0.1
-#define X_OFFSET 0.6
-#define Y_OFFSET -0.30
+#define X_SIZE 0.20
+#define Y_SIZE 0.30
 
 #define PIXEL_DISTANCE 0.0015
 #define JUMP_DISTANCE 0.005
 
-#define ELLIPSE_X_RATIO 0.7
-#define ELLIPSE_Y_RATIO 0.3
+#define ELLIPSE_X_RATIO 0.3
+#define ELLIPSE_Y_RATIO 0.7
 #define CROP_RATIO 0.0
 
 #include <vector>
@@ -87,9 +82,9 @@ void CannyDericheFilter(int, void* pointer)
     imshow("CannyDericheFilter", parameters->output);
 }
 
-void sketchToWaypoints(std::vector<geometry_msgs::Pose> &waypoints, double height, geometry_msgs::Quaternion orientation)
+void sketchToWaypoints(std::vector<geometry_msgs::Pose> &waypoints)
 {
-    /*VideoCapture capture(0);
+    VideoCapture capture(0);
     if (!capture.isOpened()) 
     {
         ROS_ERROR("Cannot open video capture device !");
@@ -107,13 +102,13 @@ void sketchToWaypoints(std::vector<geometry_msgs::Pose> &waypoints, double heigh
     {
         // Show the captured image and the detected features
         display_image = image.clone();
-        ellipse(display_image, Point(image.cols/2,image.rows/2), Size(image.cols*ELLIPSE_Y_RATIO/2, image.rows*ELLIPSE_X_RATIO/2), 0, 0, 360, Scalar(0, 0, 255), 2, LINE_AA);
+        ellipse(display_image, Point(image.cols/2,image.rows/2), Size(image.cols*ELLIPSE_X_RATIO/2, image.rows*ELLIPSE_Y_RATIO/2), 0, 0, 360, Scalar(0, 0, 255), 2, LINE_AA);
         imshow("FaceDetection", display_image);
 
-        int cropY = (int)floor(floor((image.cols*ELLIPSE_Y_RATIO + image.cols*CROP_RATIO)/Y_SIZE)*Y_SIZE);
-        int cropX = (int)floor(floor((image.rows*ELLIPSE_X_RATIO + image.rows*CROP_RATIO)/X_SIZE)*X_SIZE);
-
-        Rect crop(image.cols/2 - cropY/2, image.rows/2 - cropX/2, cropY, cropX);
+        int cropX = (int)floor(floor((image.cols*ELLIPSE_X_RATIO + image.cols*CROP_RATIO)/X_SIZE)*X_SIZE);
+        int cropY = (int)floor(floor((image.rows*ELLIPSE_Y_RATIO + image.rows*CROP_RATIO)/Y_SIZE)*Y_SIZE);
+        
+        Rect crop(image.cols/2 - cropX/2, image.rows/2 - cropY/2, cropX, cropY);
 
         // Wait for input or process the next frame      
         if((int)waitKey(10) == 10)
@@ -129,11 +124,10 @@ void sketchToWaypoints(std::vector<geometry_msgs::Pose> &waypoints, double heigh
     capture.release();
     destroyAllWindows();
 
-    Mat output = image.clone();*/
+    Mat output = image.clone();
 
-    //Mat output = imread(ros::package::getPath("panda_draws_you") + "/config/ScienceDay/"+ "Picture_9_17_7.png",IMREAD_COLOR);
-    Mat output = imread("/home/student/Downloads/heart.png",IMREAD_COLOR);
-    
+    //[DEBUG]
+    output = imread(ros::package::getPath("panda_draws_you") + "/config/Picture1.png",IMREAD_COLOR);
 
     //[DISPLAY]
     //imshow("Output",output);
@@ -214,7 +208,7 @@ void sketchToWaypoints(std::vector<geometry_msgs::Pose> &waypoints, double heigh
     Rect crop(minCol, minRow, maxCol-minCol, maxRow-minRow);
     output = output(crop); 
 
-    double ratio = min(X_SIZE/(maxRow-minRow),Y_SIZE/(maxCol-minCol));
+    double ratio = min(X_SIZE/(maxCol-minCol),Y_SIZE/(maxRow-minRow));
 
     //[DISPLAY]
     //imshow("Output",output);
@@ -297,8 +291,8 @@ void sketchToWaypoints(std::vector<geometry_msgs::Pose> &waypoints, double heigh
 
     for(int i = 0; i < pixelId.size(); i++)
     {
-        X.push_back(X_OFFSET + ratio*(output.rows - pixelId[i].y));
-        Y.push_back(Y_OFFSET + ratio*pixelId[i].x);
+        X.push_back(ratio*pixelId[i].x);
+        Y.push_back(ratio*(output.rows - pixelId[i].y));
 
         localDistances.clear();
 
@@ -315,13 +309,14 @@ void sketchToWaypoints(std::vector<geometry_msgs::Pose> &waypoints, double heigh
 
     //Re-organising the waypoints order to reduce the overall pencil trajectory => OPTIMISATION
     geometry_msgs::Pose currentPose, intermediatePose;
-    //currentPose.position.z = height;
-    currentPose.position.x = height;
-    currentPose.orientation = orientation;
 
-    //currentPose.position.x = X.back();
-    //currentPose.position.y = Y.back();
-    currentPose.position.z = X.back();
+    //Setting up waypoints height and orientation
+    currentPose.position.z = 0.0;
+    tf2::Quaternion quaternion;
+    quaternion.setRPY(M_PI,0,0);
+    currentPose.orientation = tf2::toMsg(quaternion);
+
+    currentPose.position.x = X.back();
     currentPose.position.y = Y.back();
     waypoints.push_back(currentPose);
 
@@ -355,21 +350,19 @@ void sketchToWaypoints(std::vector<geometry_msgs::Pose> &waypoints, double heigh
 
         //Switching to the closest waypoint
         currentIndex = idx[0];
-        //currentPose.position.x = X[indices[currentIndex]];
-        //currentPose.position.y = Y[indices[currentIndex]];
-        currentPose.position.z = X[indices[currentIndex]];
+        currentPose.position.x = X[indices[currentIndex]];
         currentPose.position.y = Y[indices[currentIndex]];
 
         if(localDistances[currentIndex] > JUMP_DISTANCE*JUMP_DISTANCE)
         {
             intermediatePose = waypoints.back();
-            //intermediatePose.position.z += 0.02;
-            intermediatePose.position.x -= 0.02;
+            intermediatePose.position.z += 0.02;
             waypoints.push_back(intermediatePose);
+
             intermediatePose = currentPose;
-            //intermediatePose.position.z += 0.02;
-            intermediatePose.position.x -= 0.02;
+            intermediatePose.position.z += 0.02;
             waypoints.push_back(intermediatePose);
+
             jumpCounter++;
         }
 
@@ -404,13 +397,11 @@ void sketchToWaypoints(std::vector<geometry_msgs::Pose> &waypoints, double heigh
 
     for(int i = 0; i < waypoints.size(); i++)
     {
-        //plt::plot(std::vector<double> {waypoints[i].position.y},std::vector<double> {waypoints[i].position.x}, keywords);
-        plt::plot(std::vector<double> {waypoints[i].position.y},std::vector<double> {waypoints[i].position.z}, keywords);
+        plt::plot(std::vector<double> {waypoints[i].position.x},std::vector<double> {waypoints[i].position.y}, keywords);
     }
 
     plt::xlabel("y");
     plt::ylabel("x");
     plt::axis("equal");
-    plt::show();
-    
+    plt::show();   
 }
