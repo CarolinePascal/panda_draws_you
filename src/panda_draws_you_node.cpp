@@ -24,14 +24,9 @@ int main(int argc, char **argv)
     RobotVisualTools visualTools;
     visualTools.setupOptiTrack();
 
-    //Initialisation + setting up velocity and acceleration
-    robot.init();
+    //Setting up velocity and acceleration
     robot.setAcceleration(0.1);
     robot.setVelocity(0.1);
-
-    //Create waypoints
-    std::vector<geometry_msgs::Pose> waypoints;
-    sketchToWaypoints(waypoints);
 
     //Retreive drawing plane specifications
     ros::NodeHandle nh;
@@ -59,11 +54,28 @@ int main(int argc, char **argv)
         throw std::runtime_error("MISSING PARAMETER");
     }
 
-    tf2::Matrix3x3 rotationMatrix = tf2::Matrix3x3(xAxis[0],yAxis[0],zAxis[0],xAxis[1],yAxis[1],zAxis[1],xAxis[2],yAxis[2],zAxis[2]);
-    double roll,pitch,yaw;
-    rotationMatrix.getRPY(roll,pitch,yaw);
+    //Initialisation
+    tf2::Matrix3x3 rotationMatrix = tf2::Matrix3x3(xAxis[0],-yAxis[0],-zAxis[0],xAxis[1],-yAxis[1],-zAxis[1],xAxis[2],-yAxis[2],-zAxis[2]);
+    tf2::Quaternion quaternion;
+    rotationMatrix.getRotation(quaternion);
 
-    translateTrajectory(waypoints,-X_SIZE/2,-Y_SIZE/2,0.0);
+    geometry_msgs::Pose initialPose;
+    initialPose.position.x = centerPoint[0] + 0.15*zAxis[0];
+    initialPose.position.y = centerPoint[1] + 0.15*zAxis[1];
+    initialPose.position.z = centerPoint[2] + 0.15*zAxis[2];
+    initialPose.orientation = tf2::toMsg(quaternion);
+
+    robot.goToTarget(initialPose);
+
+    //Create waypoints
+    std::vector<geometry_msgs::Pose> waypoints;
+    sketchToWaypoints(waypoints);
+
+    tf2::Matrix3x3 planeRotationMatrix = tf2::Matrix3x3(xAxis[0],yAxis[0],zAxis[0],xAxis[1],yAxis[1],zAxis[1],xAxis[2],yAxis[2],zAxis[2]);
+    double roll,pitch,yaw;
+    planeRotationMatrix.getRPY(roll,pitch,yaw);
+
+    translateTrajectory(waypoints,-X_SIZE/2,-Y_SIZE/2,0.0); 
     geometry_msgs::Point zero;
     zero.x = 0.0;
     zero.y = 0.0;
@@ -73,29 +85,28 @@ int main(int argc, char **argv)
 
     //Perform approach motion
     geometry_msgs::Pose startingPose = waypoints[0];
-    startingPose.position.x -= 0.1*zAxis[0];
-    startingPose.position.y -= 0.1*zAxis[1];
-    startingPose.position.z -= 0.1*zAxis[2];
-    robot.goToTarget(startingPose,false);
-
     startingPose.position.x += 0.1*zAxis[0];
     startingPose.position.y += 0.1*zAxis[1];
     startingPose.position.z += 0.1*zAxis[2];
+
     robot.goToTarget(startingPose,false);
 
     //Perform trajectory
     ROS_INFO("Starting robot trajectory computation...");
+    ROS_WARN("REMOVE THE PEN CAP BEFORE STARTING !");
     robot.runTrajectory(waypoints);
 
     //Perform retreat motion
-    geometry_msgs::Pose endingPose = robot.getCurrentPose();
-    endingPose.position.x -= 0.1*zAxis[0];
-    endingPose.position.y -= 0.1*zAxis[1];
-    endingPose.position.z -= 0.1*zAxis[2];
-    robot.goToTarget(endingPose);
+    geometry_msgs::Pose endingPose = waypoints.back();
+    endingPose.position.x += 0.1*zAxis[0];
+    endingPose.position.y += 0.1*zAxis[1];
+    endingPose.position.z += 0.1*zAxis[2];
 
-    robot.init(false);
+    robot.goToTarget(endingPose,false);
 
-    ros::waitForShutdown();
+    //Go back to initial pose
+    robot.goToTarget(initialPose,false);
+
+    ros::shutdown();
     return 0;
 }
