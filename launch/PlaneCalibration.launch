@@ -2,29 +2,20 @@
 <launch>
 
     <!-- GENERAL ARGUMENTS -->
-    <arg name="simulation" default="true"/>
+    <arg name="simulation" default="false"/>
     <arg name="robot_name" default="ur10e"/>
-
-    <include file="$(find ur_gazebo)/launch/$(arg robot_name)_bringup.launch" if="$(arg simulation)">
-        <arg name="gui" value="false"/>
-    </include>
 
     <!-- ROBOT SETUP -->
     <include file="$(find robot_arm_tools)/launch/Setup_$(arg robot_name).launch">
-        <arg name="tool_name" value="none"/>
+        <arg name="tool_name" value="pencil"/>
         <arg name="simulation" value="$(arg simulation)"/>
         <arg name="jogging" value="true"/>
     </include> 
 
     <!-- MAIN NODE -->
-    <node pkg="panda_draws_you" type="panda_draws_you_plane_calibration_node" name="panda_draws_you_plane_calibration_node" output="screen"/> 
+    <node pkg="panda_draws_you" type="panda_draws_you_plane_calibration_node" name="panda_draws_you_plane_calibration_node" output="screen" required="true"/> 
     
     <!-- Run Rviz -->
     <node type="rviz" name="rviz" pkg="rviz" args="-d $(find robot_arm_tools)/config/DefaultSetup.rviz"/>  <!-- Customisable RViz configuration -->
-
-    <node name="servo_server" pkg="moveit_servo" type="servo_server" output="screen" >
-        <rosparam file="$(find robot_arm_tools)/config/ur_simulated_config.yaml" command="load" />
-        <param name="robot_link_command_frame" value="base_link"/>
-    </node>
 
 </launch>
