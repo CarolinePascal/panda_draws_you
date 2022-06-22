@@ -9,7 +9,7 @@
     <include file="$(find robot_arm_tools)/launch/Setup_$(arg robot_name).launch">
         <arg name="tool_name" value="pencil"/>
         <arg name="simulation" value="$(arg simulation)"/>
-        <arg name="jogging" value="true"/>
+        <arg name="twist_control" value="true"/>
     </include> 
 
     <!-- MAIN NODE -->
