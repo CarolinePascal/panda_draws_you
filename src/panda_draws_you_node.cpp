@@ -22,7 +22,6 @@ int main(int argc, char **argv)
 
     //Robot visual tools initialisation
     RobotVisualTools visualTools;
-    visualTools.setupOptiTrack();
 
     //Initialisation + setting up velocity and acceleration
     robot.init();
