@@ -69,6 +69,8 @@ int main(int argc, char **argv)
         ROS_INFO("Switch the robot to automatic control mode - Press enter to continue");
     } while (std::cin.get() != '\n');
 
+    ROS_WARN("REMOVE THE PEN CAP BEFORE STARTING !");
+
     robot.triggerRobotStartup();
     ros::WallDuration(1.0).sleep();
 
@@ -108,9 +110,9 @@ int main(int argc, char **argv)
         ros::WallDuration(1.0).sleep();
 
         twistCommand.header.stamp = ros::Time::now();
-        twistCommand.twist.linear.x = 0.075*rotationMatrix[0][2];
-        twistCommand.twist.linear.y = 0.075*rotationMatrix[1][2];
-        twistCommand.twist.linear.z = 0.075*rotationMatrix[2][2];
+        twistCommand.twist.linear.x = 0.0;
+        twistCommand.twist.linear.y = 0.0;
+        twistCommand.twist.linear.z = 0.5;
         twistCommandPublisher.publish(twistCommand);
     
         while(abs(currentNormalEffort - initNormalEffort) < 2.0)
@@ -154,11 +156,23 @@ int main(int argc, char **argv)
     planeEquation /= sqrt(planeEquation.head(3).squaredNorm());
     Eigen::Vector3d planeNormal = planeEquation.head(3);
 
+    if(sqrt((planeEquation(0)-rotationMatrix[0][2])*(planeEquation(0)-rotationMatrix[0][2])
+        + (planeEquation(1)-rotationMatrix[1][2])*(planeEquation(1)-rotationMatrix[1][2])
+        + (planeEquation(2)-rotationMatrix[2][2])*(planeEquation(2)-rotationMatrix[2][2]))
+        <
+        sqrt((-planeEquation(0)-rotationMatrix[0][2])*(-planeEquation(0)-rotationMatrix[0][2])
+        + (-planeEquation(1)-rotationMatrix[1][2])*(-planeEquation(1)-rotationMatrix[1][2])
+        + (-planeEquation(2)-rotationMatrix[2][2])*(-planeEquation(2)-rotationMatrix[2][2])))
+    {
+        planeNormal *= -1;
+        planeEquation *= -1;
+    }
+
     Eigen::Vector3d planePoint(0.0,0.0,0.0);
     int argMaxPlaneNormal = planeNormal.array().abs().maxCoeff();
     planePoint(argMaxPlaneNormal) = -planeEquation(3)/planeNormal(argMaxPlaneNormal);
 
-    Eigen::Vector3d planeCenter(transform.translation.x,transform.translation.y,transform.translation.z);
+    Eigen::Vector3d planeCenter(centralPose.position.x,centralPose.position.y,centralPose.position.z);
     
     planeCenter = planeCenter - ((planeCenter - planePoint).transpose()*planeNormal)*planeNormal;
 
@@ -166,6 +180,13 @@ int main(int argc, char **argv)
     xAxis /= sqrt(xAxis.squaredNorm());
 
     Eigen::Vector3d yAxis = planeNormal.cross(xAxis);
+
+    if(yAxis(2) < 0)
+    {
+        xAxis = Eigen::Vector3d(-planeEquation(1),planeEquation(0),0);
+        xAxis /= sqrt(xAxis.squaredNorm());
+        yAxis = planeNormal.cross(xAxis);
+    }
 
     //Save plane equation
     std::string yamlFile = ros::package::getPath("panda_draws_you")+"/config/PlaneCalibration.yaml";
@@ -216,7 +237,7 @@ int main(int argc, char **argv)
     std::ofstream fout(yamlFile); 
     fout << config;
 
-    ros::waitForShutdown();
+    ros::shutdown();
     return 0;
 }
 

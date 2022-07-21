@@ -2,8 +2,8 @@
 <launch>
 
     <!-- GENERAL ARGUMENTS -->
-    <arg name="robot_name" default="ur10e"/>
     <arg name="simulation" default="false"/>
+    <arg name="robot_name" default="ur10e"/>
 
     <!-- ROBOT SETUP -->
     <include file="$(find robot_arm_tools)/launch/Setup_$(arg robot_name).launch">
@@ -13,7 +13,7 @@
 
     <!-- MAIN NODE -->
     <rosparam file="$(find panda_draws_you)/config/PlaneCalibration.yaml" command="load"/>
-    <node pkg="panda_draws_you" type="panda_draws_you_node" name="panda_draws_you_node" output="screen"/>
+    <node pkg="panda_draws_you" type="panda_draws_you_node" name="panda_draws_you_node" output="screen" required="true"/>  
 
     <!-- Run Rviz -->
     <param name="environmentFileName" value="$(find robot_arm_tools)/config/environments/OptiTrack.yaml"/>

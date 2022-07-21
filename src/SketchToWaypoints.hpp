@@ -1,8 +1,8 @@
 #pragma once
 
 #define PATCH_HALF_SIZE 2
-#define X_SIZE 0.20
-#define Y_SIZE 0.30
+#define X_SIZE 0.2
+#define Y_SIZE 0.3
 
 #define PIXEL_DISTANCE 0.0015
 #define JUMP_DISTANCE 0.005
@@ -84,7 +84,7 @@ void CannyDericheFilter(int, void* pointer)
 
 void sketchToWaypoints(std::vector<geometry_msgs::Pose> &waypoints)
 {
-    VideoCapture capture(0);
+    VideoCapture capture(2);
     if (!capture.isOpened()) 
     {
         ROS_ERROR("Cannot open video capture device !");
@@ -96,14 +96,19 @@ void sketchToWaypoints(std::vector<geometry_msgs::Pose> &waypoints)
 
     // Prepare an image where to store the video frames
     Mat image, display_image;
+    namedWindow("FaceDetection");
+    moveWindow("FaceDetection",1366,-(1050-768));
 
     // Main loop
     while (capture.read(image) && !image.empty()) 
     {
         // Show the captured image and the detected features
+        flip(image,image,1);
         display_image = image.clone();
         ellipse(display_image, Point(image.cols/2,image.rows/2), Size(image.cols*ELLIPSE_X_RATIO/2, image.rows*ELLIPSE_Y_RATIO/2), 0, 0, 360, Scalar(0, 0, 255), 2, LINE_AA);
-        imshow("FaceDetection", display_image);
+        
+        Rect display_crop(image.cols/2 - 1680/2, image.rows/2 - 1050/2, 1680, 1050);
+        imshow("FaceDetection", display_image(display_crop));
 
         int cropX = (int)floor(floor((image.cols*ELLIPSE_X_RATIO + image.cols*CROP_RATIO)/X_SIZE)*X_SIZE);
         int cropY = (int)floor(floor((image.rows*ELLIPSE_Y_RATIO + image.rows*CROP_RATIO)/Y_SIZE)*Y_SIZE);
@@ -127,7 +132,7 @@ void sketchToWaypoints(std::vector<geometry_msgs::Pose> &waypoints)
     Mat output = image.clone();
 
     //[DEBUG]
-    output = imread(ros::package::getPath("panda_draws_you") + "/config/Picture1.png",IMREAD_COLOR);
+    //output = imread(ros::package::getPath("panda_draws_you") + "/config/Picture1.png",IMREAD_COLOR);
 
     //[DISPLAY]
     //imshow("Output",output);
@@ -145,8 +150,8 @@ void sketchToWaypoints(std::vector<geometry_msgs::Pose> &waypoints)
 
     parameters.gaussianBlur=1;
 
-    parameters.sigma_s = 60;
-    parameters.sigma_r = 45;
+    parameters.sigma_s=5;
+    parameters.sigma_r=5;
 
     parameters.input = output.clone();
     parameters.output = output.clone();
@@ -160,11 +165,11 @@ void sketchToWaypoints(std::vector<geometry_msgs::Pose> &waypoints)
 
     createTrackbar("Gaussian Blur:","Parameters", &parameters.gaussianBlur, 10, CannyDericheFilter, (void*)&parameters);
 
-    createTrackbar("Sigma S:","Parameters", &parameters.sigma_s, 200, CannyDericheFilter, (void*)&parameters);
-    createTrackbar("Sigma R:","Parameters", &parameters.sigma_r, 100, CannyDericheFilter, (void*)&parameters);
+    createTrackbar("Sigma S:","Parameters", &parameters.sigma_s, 50, CannyDericheFilter, (void*)&parameters);
+    createTrackbar("Sigma R:","Parameters", &parameters.sigma_r, 50, CannyDericheFilter, (void*)&parameters);
 
-    createTrackbar("Min Threshold:","Parameters", &parameters.lowThreshold, 500, CannyDericheFilter, (void*)&parameters);
-    createTrackbar("Max Threshold:", "Parameters", &parameters.maxThreshold, 500, CannyDericheFilter, (void*)&parameters);
+    createTrackbar("Min Threshold:","Parameters", &parameters.lowThreshold, 50, CannyDericheFilter, (void*)&parameters);
+    createTrackbar("Max Threshold:", "Parameters", &parameters.maxThreshold, 50, CannyDericheFilter, (void*)&parameters);
     createTrackbar("Derive:","Parameters", &parameters.alDerive, 400, CannyDericheFilter, (void*)&parameters);
     createTrackbar("Mean:", "Parameters", &parameters.alMean, 400, CannyDericheFilter, (void*)&parameters);
 
