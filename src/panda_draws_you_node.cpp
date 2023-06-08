@@ -58,6 +58,15 @@ int main(int argc, char **argv)
     tf2::Quaternion quaternion;
     rotationMatrix.getRotation(quaternion);
 
+    //Add drawing plane
+    geometry_msgs::Pose drawingPlanePose;
+    drawingPlanePose.position.x = centerPoint[0] - 0.035*zAxis[0];
+    drawingPlanePose.position.y = centerPoint[1] - 0.035*zAxis[1];
+    drawingPlanePose.position.z = centerPoint[2] - 0.035*zAxis[2];
+    drawingPlanePose.orientation = tf2::toMsg(quaternion);
+    visualTools.addBox("drawingPlane",drawingPlanePose,1.0,1.0,0.01);
+
+    //Initial pose
     geometry_msgs::Pose initialPose;
     initialPose.position.x = centerPoint[0] + 0.15*zAxis[0];
     initialPose.position.y = centerPoint[1] + 0.15*zAxis[1];
@@ -88,12 +97,12 @@ int main(int argc, char **argv)
     startingPose.position.y += 0.1*zAxis[1];
     startingPose.position.z += 0.1*zAxis[2];
 
-    robot.goToTarget(startingPose,false);
+    robot.runTrajectory({startingPose},0.1,false);
 
     //Perform trajectory
     ROS_INFO("Starting robot trajectory computation...");
     ROS_WARN("REMOVE THE PEN CAP BEFORE STARTING !");
-    robot.runTrajectory(waypoints);
+    robot.runTrajectory(waypoints,0.01);
 
     //Perform retreat motion
     geometry_msgs::Pose endingPose = waypoints.back();
@@ -101,10 +110,10 @@ int main(int argc, char **argv)
     endingPose.position.y += 0.1*zAxis[1];
     endingPose.position.z += 0.1*zAxis[2];
 
-    robot.goToTarget(endingPose,false);
+    robot.runTrajectory({endingPose},0.1,false);
 
     //Go back to initial pose
-    robot.goToTarget(initialPose,false);
+    robot.runTrajectory({initialPose},0.1,false);
 
     ros::shutdown();
     return 0;

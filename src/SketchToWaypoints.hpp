@@ -121,7 +121,7 @@ void sketchToWaypoints(std::vector<geometry_msgs::Pose> &waypoints)
             std::time_t t = std::time(0);
             std::tm* now = std::localtime(&t);
             image = image(crop);
-            imwrite(ros::package::getPath("panda_draws_you") + "/config/ScienceDay/Picture_"+std::to_string(now->tm_mday)+"_"+std::to_string(now->tm_hour)+"_"+std::to_string(now->tm_min)+".png", image);
+            imwrite(ros::package::getPath("panda_draws_you") + "/config/Pictures/Picture_"+std::to_string(now->tm_mday)+"_"+std::to_string(now->tm_hour)+"_"+std::to_string(now->tm_min)+".png", image);
             break;
         }
     }
@@ -132,7 +132,7 @@ void sketchToWaypoints(std::vector<geometry_msgs::Pose> &waypoints)
     Mat output = image.clone();
 
     //[DEBUG]
-    //output = imread(ros::package::getPath("panda_draws_you") + "/config/Picture1.png",IMREAD_COLOR);
+    //Mat output = imread(ros::package::getPath("panda_draws_you") + "/config/Pictures/Picture_5_17_41.png",IMREAD_COLOR);
 
     //[DISPLAY]
     //imshow("Output",output);
