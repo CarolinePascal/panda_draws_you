@@ -9,15 +9,31 @@
     <include file="$(find robot_arm_tools)/launch/Setup_$(arg robot_name).launch">
         <arg name="tool_name" value="pencil"/>
         <arg name="simulation" value="$(arg simulation)"/>
-        <arg name="twist_control" value="true"/>
     </include> 
+
+    <rosparam file="$(find descartes_capability)/config/setup.yaml" command="load"/>
+
+    <rosparam command="load" file="$(find robot_arm_tools)/config/servo/$(arg robot_name)_controller.yaml" subst_value="true"/>
+    <node name="ros_control_stopped_spawner_servo" pkg="controller_manager" type="spawner" respawn="false" output="screen" args="--stopped joint_group_pos_controller" />
+
+     <!-- MOVEIT SERVO INTERFACE -->
+    <node name="servo_server" pkg="moveit_servo" type="servo_server" output="screen" >
+        <rosparam file="$(find robot_arm_tools)/config/servo/servo_simulated_config.yaml" command="load" />
+        <param name="use_gazebo" value="true" if="$(arg simulation)"/>
+        
+        <remap from="~move_group_name" to="groupName"/>
+        <remap from="~planning_frame" to="baseLinkName"/>
+        <remap from="~ee_frame_name" to="endEffectorName"/>
+        <remap from="~robot_link_command_frame" to="endEffectorName"/>
+    </node>
 
     <!-- MAIN NODE -->
     <node pkg="panda_draws_you" type="panda_draws_you_plane_calibration_node" name="panda_draws_you_plane_calibration_node" output="screen" required="true"/> 
     
     <!-- Run Rviz -->
-    <param name="environmentFileName" value="$(find robot_arm_tools)/config/environments/OptiTrack.yaml"/>
-    <node pkg="robot_arm_tools" type="robot_arm_tools_environment_node" name="robot_arm_tools_environment_node" output="screen"/>
-    <node type="rviz" name="rviz" pkg="rviz" args="-d $(find robot_arm_tools)/config/DefaultSetup.rviz"/>  <!-- Customisable RViz configuration -->
+    <node pkg="robot_arm_tools" type="robot_arm_tools_environment_node" name="robot_arm_tools_environment_node" output="screen">
+        <param name="environmentFileName" value="$(find panda_draws_you)/config/DrawingEnvironment.yaml"/>
+    </node>
+    <node type="rviz" name="rviz" pkg="rviz" args="-d $(find robot_arm_tools)/config/RViz/DefaultSetup.rviz"/>  <!-- Customisable RViz configuration -->
 
 </launch>
